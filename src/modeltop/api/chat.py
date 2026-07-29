@@ -113,29 +113,63 @@ def _first_present(usage: Mapping[object, object], *keys: str) -> object:
     return None
 
 
+def _completion_token_details(
+    usage: Mapping[object, object],
+) -> tuple[int | None, int | None]:
+    if "completion_tokens_details" not in usage:
+        return None, None
+    value = usage["completion_tokens_details"]
+    if value is None:
+        return None, None
+    if not isinstance(value, Mapping):
+        raise _stream_protocol("Chat usage completion_tokens_details is not an object")
+    details = cast(Mapping[object, object], value)
+    return (
+        _token_count(
+            details.get("accepted_prediction_tokens"),
+            "completion_tokens_details.accepted_prediction_tokens",
+        ),
+        _token_count(
+            details.get("rejected_prediction_tokens"),
+            "completion_tokens_details.rejected_prediction_tokens",
+        ),
+    )
+
+
 def _parse_usage(value: object) -> UsageUpdate:
     if not isinstance(value, Mapping):
         raise _stream_protocol("Chat usage is not an object")
     usage = cast(Mapping[object, object], value)
+    draft_fields = ("draft_tokens", "num_draft_tokens", "speculative_tokens")
+    accepted_fields = (
+        "accepted_tokens",
+        "num_accepted_tokens",
+        "spec_accepted_tokens",
+    )
+    detail_accepted, detail_rejected = _completion_token_details(usage)
+    if any(field in usage for field in draft_fields):
+        draft_tokens = _token_count(
+            _first_present(usage, *draft_fields),
+            "draft_tokens",
+        )
+    elif detail_accepted is not None and detail_rejected is not None:
+        draft_tokens = detail_accepted + detail_rejected
+    else:
+        draft_tokens = None
+    accepted_tokens = (
+        _token_count(
+            _first_present(usage, *accepted_fields),
+            "accepted_tokens",
+        )
+        if any(field in usage for field in accepted_fields)
+        else detail_accepted
+    )
     return UsageUpdate(
         _token_count(usage.get("prompt_tokens"), "prompt_tokens"),
         _token_count(usage.get("completion_tokens"), "completion_tokens"),
         _token_count(usage.get("total_tokens"), "total_tokens"),
-        _token_count(
-            _first_present(
-                usage, "draft_tokens", "num_draft_tokens", "speculative_tokens"
-            ),
-            "draft_tokens",
-        ),
-        _token_count(
-            _first_present(
-                usage,
-                "accepted_tokens",
-                "num_accepted_tokens",
-                "spec_accepted_tokens",
-            ),
-            "accepted_tokens",
-        ),
+        draft_tokens,
+        accepted_tokens,
         _acceptance_rate(
             _first_present(usage, "acceptance_rate", "spec_token_acceptance_rate"),
             "acceptance_rate",

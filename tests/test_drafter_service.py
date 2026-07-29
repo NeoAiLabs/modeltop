@@ -15,6 +15,7 @@ from modeltop.api.chat import (
     UsageUpdate,
 )
 from modeltop.api.errors import HTTPResponseError
+from modeltop.api.metrics import SpeculativeCounters
 from modeltop.benchmarks.models import (
     DrafterBenchmarkConfig,
     DrafterBenchmarkStatus,
@@ -98,6 +99,26 @@ class _GatedClient:
             self.closed = True
 
 
+class _CountersReader:
+    def __init__(self, snapshots: list[SpeculativeCounters | None]) -> None:
+        self.snapshots = snapshots
+        self.calls: list[tuple[str, float]] = []
+
+    async def get_vllm_speculative_counters(
+        self, model_id: str, *, timeout_seconds: float
+    ) -> SpeculativeCounters | None:
+        self.calls.append((model_id, timeout_seconds))
+        return self.snapshots.pop(0)
+
+
+class _UnavailableCountersReader:
+    async def get_vllm_speculative_counters(
+        self, model_id: str, *, timeout_seconds: float
+    ) -> SpeculativeCounters | None:
+        del model_id, timeout_seconds
+        raise RuntimeError("metrics endpoint unavailable")
+
+
 def _success(
     text: str = "answer",
     *,
@@ -143,6 +164,7 @@ def _service(
     store: ApplicationStateStore,
     *,
     on_state_change: Callable[[ApplicationState], None] | None = None,
+    telemetry_reader: _CountersReader | _UnavailableCountersReader | None = None,
 ) -> DrafterBenchmarkService:
     server = ServerConfig(
         id="server",
@@ -157,6 +179,7 @@ def _service(
         on_state_change or (lambda _state: None),
         utc_now=lambda: datetime(2026, 7, 27, tzinfo=UTC),
         benchmark_id_factory=lambda _started_at: f"drafter-{id(client):x}",
+        speculative_telemetry_reader=telemetry_reader,
     )
 
 
@@ -219,6 +242,70 @@ def test_missing_telemetry_observation() -> None:
         assert len(result.observations) == 1
         assert result.observations[0].code == "speculative_telemetry_unavailable"
         assert result.acceptance_rate.count == 0
+
+    asyncio.run(scenario())
+
+
+def test_vllm_counter_deltas_hydrate_missing_usage_telemetry() -> None:
+    async def scenario() -> None:
+        client = _ScriptedClient([_success_no_telemetry(), _success_no_telemetry()])
+        reader = _CountersReader(
+            [
+                SpeculativeCounters(0, 0),
+                SpeculativeCounters(10, 7),
+                SpeculativeCounters(10, 7),
+                SpeculativeCounters(20, 12),
+            ]
+        )
+        states: list[ApplicationState] = []
+        service = _service(
+            client, _store(), on_state_change=states.append, telemetry_reader=reader
+        )
+        result = await service.run_benchmark(
+            service.begin_benchmark(
+                DrafterBenchmarkConfig(
+                    warmup_runs=0, measured_runs=2, request_timeout_seconds=30
+                )
+            )
+        )
+
+        assert reader.calls == [("model", 30)] * 4
+        assert [run.draft_tokens for run in result.run_results] == [10, 10]
+        assert [run.accepted_tokens for run in result.run_results] == [7, 5]
+        assert [run.acceptance_rate for run in result.run_results] == [
+            pytest.approx(0.7),
+            pytest.approx(0.5),
+        ]
+        assert result.draft_tokens.mean == 10
+        assert result.accepted_tokens.mean == 6
+        assert result.acceptance_rate.mean == pytest.approx(0.6)
+        assert result.observations == ()
+        assert any(
+            state.drafter_benchmark.progress is not None
+            and state.drafter_benchmark.progress.latest_metrics is not None
+            and state.drafter_benchmark.progress.latest_metrics.acceptance_rate
+            == pytest.approx(0.7)
+            for state in states
+        )
+
+    asyncio.run(scenario())
+
+
+def test_vllm_counter_failures_leave_missing_usage_telemetry_unavailable() -> None:
+    async def scenario() -> None:
+        service = _service(
+            _ScriptedClient([_success_no_telemetry()]),
+            _store(),
+            telemetry_reader=_UnavailableCountersReader(),
+        )
+        result = await service.run_benchmark(
+            service.begin_benchmark(
+                DrafterBenchmarkConfig(warmup_runs=0, measured_runs=1)
+            )
+        )
+        assert result.status is DrafterBenchmarkStatus.COMPLETED
+        assert result.acceptance_rate.count == 0
+        assert result.observations[0].code == "speculative_telemetry_unavailable"
 
     asyncio.run(scenario())
 

@@ -28,6 +28,10 @@ from modeltop.api.errors import (
     RateLimitError,
     RequestRejectedError,
 )
+from modeltop.api.metrics import (
+    SpeculativeCounters,
+    parse_vllm_speculative_counters,
+)
 from modeltop.chat.models import ChatMessage, GenerationSettings
 
 
@@ -62,6 +66,82 @@ async def _collect(client: OpenAICompatibleClient) -> list[object]:
             GenerationSettings(seed=7),
         )
     ]
+
+
+def test_vllm_speculative_counter_parser_sums_selected_model_engines() -> None:
+    payload = """
+# HELP vllm:spec_decode_num_draft_tokens_total Draft tokens
+vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="selected"} 12
+vllm:spec_decode_num_draft_tokens_total{engine="1",model_name="selected"} 8.0
+vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="selected"} 9
+vllm:spec_decode_num_accepted_tokens_total{engine="1",model_name="selected"} 6
+vllm:spec_decode_num_draft_tokens_total{engine="0",model_name="other"} 100
+vllm:spec_decode_num_accepted_tokens_total{engine="0",model_name="other"} 100
+"""
+    assert parse_vllm_speculative_counters(payload, "selected") == SpeculativeCounters(
+        draft_tokens=20, accepted_tokens=15
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        'vllm:spec_decode_num_draft_tokens_total{model_name="selected"} 12',
+        (
+            'vllm:spec_decode_num_draft_tokens_total{model_name="other"} 12\n'
+            'vllm:spec_decode_num_accepted_tokens_total{model_name="other"} 9'
+        ),
+        (
+            'vllm:spec_decode_num_draft_tokens_total{model_name="selected"} 12.5\n'
+            'vllm:spec_decode_num_accepted_tokens_total{model_name="selected"} 9'
+        ),
+        'vllm:spec_decode_num_draft_tokens_total{model_name="selected" 12',
+    ],
+)
+def test_vllm_speculative_counter_parser_returns_none_when_unavailable(
+    payload: str,
+) -> None:
+    assert parse_vllm_speculative_counters(payload, "selected") is None
+
+
+def test_vllm_speculative_counter_request_is_optional_and_authenticated() -> None:
+    async def scenario() -> None:
+        requests: list[httpx.Request] = []
+        responses = [
+            httpx.Response(
+                200,
+                text=(
+                    "vllm:spec_decode_num_draft_tokens_total"
+                    '{model_name="selected"} 20\n'
+                    "vllm:spec_decode_num_accepted_tokens_total"
+                    '{model_name="selected"} 15'
+                ),
+            ),
+            httpx.Response(503),
+        ]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return responses.pop(0)
+
+        client = OpenAICompatibleClient(
+            "http://server/prefix/v1",
+            "unique-key",
+            3,
+            transport=httpx.MockTransport(handler),
+        )
+        assert await client.get_vllm_speculative_counters(
+            "selected", timeout_seconds=2
+        ) == SpeculativeCounters(draft_tokens=20, accepted_tokens=15)
+        assert (
+            await client.get_vllm_speculative_counters("selected", timeout_seconds=2)
+            is None
+        )
+        assert str(requests[0].url) == "http://server/prefix/metrics"
+        assert requests[0].headers["authorization"] == "Bearer unique-key"
+        await client.aclose()
+
+    asyncio.run(scenario())
 
 
 def test_exact_endpoint_headers_ordered_payload_and_seed() -> None:
@@ -424,6 +504,17 @@ def test_usage_parses_speculative_fields_and_aliases() -> None:
         b'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1,'
         b'"total_tokens":3}}\n\n'
     )
+    nested = (
+        b'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4,'
+        b'"total_tokens":14,"completion_tokens_details":'
+        b'{"accepted_prediction_tokens":4,"rejected_prediction_tokens":2}}}\n\n'
+    )
+    flat_wins = (
+        b'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":4,'
+        b'"total_tokens":14,"draft_tokens":8,"accepted_tokens":5,'
+        b'"completion_tokens_details":'
+        b'{"accepted_prediction_tokens":4,"rejected_prediction_tokens":2}}}\n\n'
+    )
     decoder = SSEDecoder()
     assert decoder.feed(canonical) == (
         UsageUpdate(
@@ -439,6 +530,12 @@ def test_usage_parses_speculative_fields_and_aliases() -> None:
         UsageUpdate(1, 1, 2, draft_tokens=8, accepted_tokens=5, acceptance_rate=0.625),
     )
     assert decoder.feed(omitted) == (UsageUpdate(2, 1, 3),)
+    assert decoder.feed(nested) == (
+        UsageUpdate(10, 4, 14, draft_tokens=6, accepted_tokens=4),
+    )
+    assert decoder.feed(flat_wins) == (
+        UsageUpdate(10, 4, 14, draft_tokens=8, accepted_tokens=5),
+    )
 
 
 @pytest.mark.parametrize(
@@ -454,6 +551,14 @@ def test_usage_parses_speculative_fields_and_aliases() -> None:
         b'"total_tokens":2,"acceptance_rate":1.5}}\n\n',
         b'data: {"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,'
         b'"total_tokens":2,"acceptance_rate":"0.5"}}\n\n',
+        b'data: {"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,'
+        b'"total_tokens":2,"completion_tokens_details":[]}}\n\n',
+        b'data: {"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,'
+        b'"total_tokens":2,"completion_tokens_details":'
+        b'{"accepted_prediction_tokens":true,"rejected_prediction_tokens":1}}}\n\n',
+        b'data: {"choices":[],"usage":{"prompt_tokens":1,"completion_tokens":1,'
+        b'"total_tokens":2,"completion_tokens_details":'
+        b'{"accepted_prediction_tokens":1,"rejected_prediction_tokens":-1}}}\n\n',
     ],
 )
 def test_decoder_rejects_malformed_speculative_usage(payload: bytes) -> None:

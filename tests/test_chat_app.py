@@ -58,7 +58,6 @@ class _GatedChatStream(httpx.AsyncByteStream):
         self.closed = True
 
 
-
 class _SteppedChatStream(httpx.AsyncByteStream):
     def __init__(self, chunks: tuple[str, ...]) -> None:
         self.chunks = chunks
@@ -77,7 +76,6 @@ class _SteppedChatStream(httpx.AsyncByteStream):
             b'"completion_tokens":2,"total_tokens":6}}\n\n'
         )
         yield b"data: [DONE]\n\n"
-
 
 
 def _delta(text: str) -> bytes:
@@ -240,9 +238,10 @@ def test_sidebar_ids_inline_navigation_focus_and_geometry() -> None:
             await pilot.pause()
             assert tuple(app.screen_stack) == screens
             assert app.query_one(ContentSwitcher).current == "chat-workspace"
-            assert _plain_render(app.query_one("#header-subtitle", Static)) == (
-                "LOCAL HARDWARE · CHAT READY"
-            )
+            header_subtitle = _plain_render(
+                app.query_one("#header-subtitle", Static)
+            ).rstrip()
+            assert header_subtitle == "LOCAL HARDWARE · CHAT READY"
             assert isinstance(app.focused, TextArea)
             chat = app.query_one(ChatView)
             assert chat.region.width > 0 and chat.region.height > 0
@@ -330,9 +329,7 @@ def test_gated_stream_is_incremental_history_survives_and_metrics_finalize() -> 
 
 def test_streamed_chat_follows_bottom_until_reader_scrolls_away() -> None:
     async def scenario() -> None:
-        chunks = tuple(
-            f"fragment {index} {'x' * 60}\n" * 16 for index in range(1, 5)
-        )
+        chunks = tuple(f"fragment {index} {'x' * 60}\n" * 16 for index in range(1, 5))
         stream = _SteppedChatStream(chunks)
         app = _app(_ChatTransport([stream]))
 

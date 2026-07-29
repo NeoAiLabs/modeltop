@@ -7,8 +7,10 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from typing import Protocol
 from uuid import uuid4
 
+from modeltop.api.metrics import SpeculativeCounters
 from modeltop.benchmarks.models import (
     DrafterBenchmarkConfig,
     DrafterBenchmarkProgress,
@@ -37,6 +39,14 @@ logger = logging.getLogger(__name__)
 type StateCallback = Callable[[ApplicationState], None]
 type UtcNow = Callable[[], datetime]
 type BenchmarkIdFactory = Callable[[datetime], str]
+
+
+class SpeculativeTelemetryReader(Protocol):
+    """Optional vLLM counter reader used when response usage lacks telemetry."""
+
+    async def get_vllm_speculative_counters(
+        self, model_id: str, *, timeout_seconds: float
+    ) -> SpeculativeCounters | None: ...
 
 
 class DrafterBenchmarkOperationError(Exception):
@@ -126,6 +136,7 @@ class DrafterBenchmarkService:
         on_state_change: StateCallback,
         *,
         utc_now: UtcNow = lambda: datetime.now(UTC),
+        speculative_telemetry_reader: SpeculativeTelemetryReader | None = None,
         benchmark_id_factory: BenchmarkIdFactory = _default_benchmark_id_factory,
     ) -> None:
         self._generation_service = generation_service
@@ -134,6 +145,7 @@ class DrafterBenchmarkService:
         self._on_state_change = on_state_change
         self._utc_now = utc_now
         self._benchmark_id_factory = benchmark_id_factory
+        self._speculative_telemetry_reader = speculative_telemetry_reader
 
     @property
     def state(self) -> ApplicationState:
@@ -310,6 +322,9 @@ class DrafterBenchmarkService:
                         )
 
                     try:
+                        counters_before = await self._read_speculative_counters(
+                            pending.model_id, pending.config.request_timeout_seconds
+                        )
                         outcome = await self._generation_service.run(
                             request, on_progress
                         )
@@ -360,6 +375,27 @@ class DrafterBenchmarkService:
                                 error.error.user_message,
                             )
                     else:
+                        counters_after = await self._read_speculative_counters(
+                            pending.model_id, pending.config.request_timeout_seconds
+                        )
+                        response_acceptance_rate = outcome.metrics.acceptance_rate
+                        outcome = self._hydrate_counter_telemetry(
+                            outcome, counters_before, counters_after
+                        )
+                        if (
+                            response_acceptance_rate is None
+                            and outcome.metrics.acceptance_rate is not None
+                        ):
+                            self._handle_progress(
+                                pending,
+                                GenerationProgress(
+                                    outcome.content,
+                                    outcome.metrics,
+                                    outcome.notice,
+                                    outcome.status_code,
+                                ),
+                                completed_measured=completed_measured,
+                            )
                         run_result = self._run_result(
                             run_number,
                             warmup,
@@ -566,6 +602,52 @@ class DrafterBenchmarkService:
             )
 
         self._publish(transform)
+
+    async def _read_speculative_counters(
+        self, model_id: str, timeout_seconds: float
+    ) -> SpeculativeCounters | None:
+        if self._speculative_telemetry_reader is None:
+            return None
+        try:
+            return (
+                await self._speculative_telemetry_reader.get_vllm_speculative_counters(
+                    model_id, timeout_seconds=timeout_seconds
+                )
+            )
+        except Exception:
+            logger.debug(
+                "Optional vLLM metrics unavailable model=%s", model_id, exc_info=True
+            )
+            return None
+
+    @staticmethod
+    def _hydrate_counter_telemetry(
+        outcome: GenerationOutcome,
+        counters_before: SpeculativeCounters | None,
+        counters_after: SpeculativeCounters | None,
+    ) -> GenerationOutcome:
+        """Apply valid vLLM counter deltas only when response telemetry is absent."""
+        if (
+            outcome.metrics.acceptance_rate is not None
+            or counters_before is None
+            or counters_after is None
+        ):
+            return outcome
+        draft_delta = counters_after.draft_tokens - counters_before.draft_tokens
+        accepted_delta = (
+            counters_after.accepted_tokens - counters_before.accepted_tokens
+        )
+        if not (
+            draft_delta > 0 and accepted_delta >= 0 and accepted_delta <= draft_delta
+        ):
+            return outcome
+        metrics = replace(
+            outcome.metrics,
+            draft_tokens=draft_delta,
+            accepted_tokens=accepted_delta,
+            acceptance_rate=accepted_delta / draft_delta,
+        )
+        return replace(outcome, metrics=metrics)
 
     @staticmethod
     def _run_result(

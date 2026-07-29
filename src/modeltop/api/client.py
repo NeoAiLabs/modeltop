@@ -33,6 +33,10 @@ from modeltop.api.errors import (
     RequestTimeoutError,
     ServerConnectionError,
 )
+from modeltop.api.metrics import (
+    SpeculativeCounters,
+    parse_vllm_speculative_counters,
+)
 from modeltop.chat.models import ChatMessage, GenerationSettings
 
 logger = logging.getLogger(__name__)
@@ -299,6 +303,18 @@ class OpenAICompatibleClient:
             latency_ms=latency_ms,
             status_code=response.status_code,
         )
+
+    async def get_vllm_speculative_counters(
+        self, model_id: str, *, timeout_seconds: float
+    ) -> SpeculativeCounters | None:
+        """Read optional selected-model vLLM speculative-decoding counters."""
+        try:
+            response = await self._client.get("../metrics", timeout=timeout_seconds)
+            if not 200 <= response.status_code <= 299:
+                return None
+            return parse_vllm_speculative_counters(response.text, model_id)
+        except (httpx.RequestError, UnicodeError, ValueError):
+            return None
 
     async def stream_chat_completion(
         self,
