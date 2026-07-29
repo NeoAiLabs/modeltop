@@ -97,12 +97,15 @@ class RequestTable(DataTable[str]):
 
     def update_requests(self, requests: Iterable[RequestRow]) -> None:
         """Append unseen IDs and update changed cells without clearing rows."""
+        was_at_bottom = self.is_vertical_scroll_end
+        rows_appended = False
         for request in requests:
             key = request.request_id
             rendered = self._render_row(request)
             previous = self._rendered.get(key)
             if previous is None:
                 self.add_row(*rendered, key=key)
+                rows_appended = True
             elif previous != rendered:
                 for column, old, new in zip(
                     self.COLUMNS, previous, rendered, strict=True
@@ -110,3 +113,5 @@ class RequestTable(DataTable[str]):
                     if old != new:
                         self.update_cell(key, column, new)
             self._rendered[key] = rendered
+        if rows_appended and was_at_bottom:
+            self.anchor()

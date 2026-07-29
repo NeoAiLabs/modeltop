@@ -70,10 +70,6 @@ class ChatHistory(VerticalScroll):
             if response.startswith(self._stream_text):
                 delta = response[len(self._stream_text) :]
                 if delta and self._markdown_stream is not None:
-                    if self.is_vertical_scroll_end:
-                        self.anchor()
-                    else:
-                        self.anchor(False)
                     await self._markdown_stream.write(delta)
                     self._stream_text = response
             elif response != self._stream_text:

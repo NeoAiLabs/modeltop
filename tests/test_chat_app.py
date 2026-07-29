@@ -58,6 +58,28 @@ class _GatedChatStream(httpx.AsyncByteStream):
         self.closed = True
 
 
+
+class _SteppedChatStream(httpx.AsyncByteStream):
+    def __init__(self, chunks: tuple[str, ...]) -> None:
+        self.chunks = chunks
+        self.sent = tuple(asyncio.Event() for _ in chunks)
+        self.advance = tuple(asyncio.Event() for _ in chunks[:-1])
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for index, chunk in enumerate(self.chunks):
+            yield _delta(chunk)
+            self.sent[index].set()
+            if index < len(self.advance):
+                await self.advance[index].wait()
+        yield b'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+        yield (
+            b'data: {"choices":[],"usage":{"prompt_tokens":4,'
+            b'"completion_tokens":2,"total_tokens":6}}\n\n'
+        )
+        yield b"data: [DONE]\n\n"
+
+
+
 def _delta(text: str) -> bytes:
     payload = {"choices": [{"delta": {"content": text}, "finish_reason": None}]}
     return f"data: {json.dumps(payload)}\n\n".encode()
@@ -66,7 +88,7 @@ def _delta(text: str) -> bytes:
 class _ChatTransport(httpx.AsyncBaseTransport):
     def __init__(
         self,
-        streams: list[_GatedChatStream] | None = None,
+        streams: list[_GatedChatStream | _SteppedChatStream] | None = None,
         *,
         fail_model_request: int | None = None,
         gate_model_request: int | None = None,
@@ -302,6 +324,63 @@ def test_gated_stream_is_incremental_history_survives_and_metrics_finalize() -> 
             ]
             follow_stream.release.set()
         assert stream.closed
+
+    asyncio.run(scenario())
+
+
+def test_streamed_chat_follows_bottom_until_reader_scrolls_away() -> None:
+    async def scenario() -> None:
+        chunks = tuple(
+            f"fragment {index} {'x' * 60}\n" * 16 for index in range(1, 5)
+        )
+        stream = _SteppedChatStream(chunks)
+        app = _app(_ChatTransport([stream]))
+
+        async def wait_for_rendered(expected: str) -> None:
+            for _ in range(30):
+                await pilot.pause()
+                state = app.dashboard_state
+                markdown = tuple(history.query(Markdown))[-1]
+                response_rendered = state is not None and (
+                    state.current_response == expected
+                    or (
+                        bool(state.chat_session.messages)
+                        and state.chat_session.messages[-1].content == expected
+                    )
+                )
+                if response_rendered and markdown.source == expected:
+                    return
+            raise AssertionError("streamed response was not rendered")
+
+        async with app.run_test(size=(80, 24)) as pilot:
+            await _wait_for_status(app, pilot, ServerStatus.ONLINE)
+            await pilot.press("down", "enter")
+            await pilot.press("f", "o", "l", "l", "o", "w", "enter")
+            history = app.query_one(ChatHistory)
+
+            await asyncio.wait_for(stream.sent[0].wait(), timeout=3)
+            await wait_for_rendered(chunks[0])
+            assert history.is_vertical_scroll_end
+
+            stream.advance[0].set()
+            await asyncio.wait_for(stream.sent[1].wait(), timeout=3)
+            await wait_for_rendered("".join(chunks[:2]))
+            assert history.is_vertical_scroll_end
+
+            history.scroll_home(animate=False)
+            await pilot.pause()
+            stream.advance[1].set()
+            await asyncio.wait_for(stream.sent[2].wait(), timeout=3)
+            await wait_for_rendered("".join(chunks[:3]))
+            assert history.scroll_offset.y == 0
+            assert not history.is_vertical_scroll_end
+
+            history.scroll_end(animate=False)
+            await pilot.pause()
+            stream.advance[2].set()
+            await asyncio.wait_for(stream.sent[3].wait(), timeout=3)
+            await wait_for_rendered("".join(chunks))
+            assert history.is_vertical_scroll_end
 
     asyncio.run(scenario())
 

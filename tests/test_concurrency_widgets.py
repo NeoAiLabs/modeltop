@@ -90,3 +90,45 @@ def test_request_table_retains_500_rows_and_updates_one_in_place() -> None:
             await pilot.resize_terminal(100, 30)
 
     asyncio.run(scenario())
+
+
+def test_request_table_follows_new_rows_until_reader_scrolls_away() -> None:
+    async def scenario() -> None:
+        app = _WidgetApp()
+        async with app.run_test(size=(80, 24)) as pilot:
+            table = app.query_one(RequestTable)
+
+            def queued(sequence: int) -> ConcurrencyRequestProgress:
+                return ConcurrencyRequestProgress(
+                    request_id=f"benchmark-c4-r{sequence:04d}",
+                    concurrency_level=4,
+                    sequence_number=sequence,
+                    state="queued",
+                    queued_at=0.0,
+                    started_at=None,
+                    latest_metrics=None,
+                    error=None,
+                )
+
+            table.update_requests(tuple(queued(sequence) for sequence in range(1, 41)))
+            await pilot.pause()
+            assert table.is_vertical_scroll_end
+
+            table.update_requests((queued(41),))
+            await pilot.pause()
+            assert table.is_vertical_scroll_end
+
+            table.scroll_home(animate=False)
+            await pilot.pause()
+            table.update_requests((queued(42),))
+            await pilot.pause()
+            assert table.scroll_offset.y == 0
+            assert not table.is_vertical_scroll_end
+
+            table.scroll_end(animate=False)
+            await pilot.pause()
+            table.update_requests((queued(43),))
+            await pilot.pause()
+            assert table.is_vertical_scroll_end
+
+    asyncio.run(scenario())
