@@ -1,0 +1,81 @@
+application:
+  refresh_interval_seconds: 5
+  request_timeout_seconds: 5
+  default_server: local-8888
+hardware:
+  enabled: true
+  refresh_interval_seconds: 2
+  preferred_provider: auto
+benchmarks:
+  concurrency:
+    default_levels: [1, 2, 4, 8]
+    requests_per_level: 16
+    warmup_requests: 2
+    max_tokens: 256
+    temperature: 0.0
+    top_p: 1.0
+    request_timeout_seconds: 120.0
+    delay_between_levels_seconds: 3.0
+    maximum_concurrency: 128
+  context:
+    default_mode: sweep
+    default_lengths: [1024, 4096, 8192, 16384, 32768]
+    context_unit: tokens
+    repetitions_per_length: 3
+    warmup_requests: 1
+    content_source: synthetic
+    base_text: null
+    random_seed: 42
+    maximum_output_tokens: 128
+    temperature: 0.0
+    top_p: 1.0
+    seed: 42
+    request_timeout_seconds: 300.0
+    delay_between_lengths_seconds: 3.0
+    maximum_context_test_tokens: 262144
+    warning_threshold_tokens: 65536
+    prompt_target_tolerance_percent: 1.0
+    hardware_sample_interval_seconds: 0.5
+    estimated_input_rate_enabled: true
+    reuse_prompt: true
+    unique_prompt_suffix_per_run: false
+    early_stop_enabled: true
+    continue_after_timeout: true
+    probe:
+      start_tokens: 4096
+      maximum_tokens: 131072
+      resolution_tokens: 1024
+    retrieval:
+      enabled: false
+      positions: [beginning, middle, end]
+      key: null
+      maximum_output_tokens: 32
+      case_insensitive_match: false
+      containment_match: false
+      truncation_detection: true
+      regenerate_per_run: true
+  tool_calling:
+    default_suite: full
+    request_timeout_seconds: 120.0
+  drafter:
+    warmup_runs: 1
+    measured_runs: 5
+    max_tokens: 256
+    temperature: 0.0
+    top_p: 1.0
+    seed: 42
+    request_timeout_seconds: 300.0
+    continue_on_error: false
+servers:
+  - id: local-vllm
+    name: Local vLLM
+    base_url: http://127.0.0.1:8000/v1
+    api_key: EMPTY
+    backend_hint: vllm
+    default_model: null
+  - id: local-8888
+    name: Local 8888
+    base_url: http://127.0.0.1:8888/v1
+    api_key: EMPTY
+    backend_hint: null
+    default_model: null
