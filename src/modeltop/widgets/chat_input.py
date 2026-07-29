@@ -38,14 +38,14 @@ class ChatInput(Vertical):
     ChatInput {
         width: 1fr;
         height: 6;
-        border: solid #2d3b49;
-        background: #111820;
+        border: solid $border-blurred;
+        background: $catppuccin-base;
         padding: 0 1;
     }
 
     ChatInput #chat-input-label {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
 
@@ -53,7 +53,7 @@ class ChatInput(Vertical):
         width: 1fr;
         height: 4;
         border: none;
-        background: #0b0f14;
+        background: $background;
     }
     """
 

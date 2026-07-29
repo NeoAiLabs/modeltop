@@ -21,11 +21,11 @@ class DrafterConfigurationPanel(VerticalScroll):
         height: 1fr;
         padding: 0 1;
         overflow-x: hidden;
-        background: #0f151d;
+        background: $catppuccin-base;
     }
     DrafterConfigurationPanel .section-title {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
     DrafterConfigurationPanel #drafter-prompt { height: 5; }
@@ -33,7 +33,7 @@ class DrafterConfigurationPanel(VerticalScroll):
     DrafterConfigurationPanel .config-row Label { width: 18; padding-top: 1; }
     DrafterConfigurationPanel .config-row Input { width: 1fr; }
     DrafterConfigurationPanel #continue-row { height: 2; }
-    DrafterConfigurationPanel #drafter-run-plan { height: 2; color: #7f8c9a; }
+    DrafterConfigurationPanel #drafter-run-plan { height: 2; color: $catppuccin-muted; }
     DrafterConfigurationPanel #drafter-run { width: 18; }
     """
 

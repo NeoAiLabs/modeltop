@@ -12,9 +12,13 @@ class ContextProgressPanel(VerticalScroll):
 
     DEFAULT_CSS = """
     ContextProgressPanel { width: 1fr; height: 1fr; padding: 0 1; }
-    ContextProgressPanel .section-title { height: 1; color: #5da9e9; text-style: bold; }
+    ContextProgressPanel .section-title {
+        height: 1;
+        color: $primary;
+        text-style: bold;
+    }
     ContextProgressPanel .progress-row { height: auto; min-height: 1; }
-    ContextProgressPanel #context-progress-warning { color: #e5c07b; }
+    ContextProgressPanel #context-progress-warning { color: $warning; }
     """
 
     def compose(self) -> ComposeResult:

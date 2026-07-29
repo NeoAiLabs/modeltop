@@ -12,6 +12,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Horizontal
+from textual.reactive import Reactive
 from textual.screen import ModalScreen, Screen
 from textual.timer import Timer
 from textual.widgets import Button, ContentSwitcher, OptionList, Static
@@ -95,6 +96,7 @@ from modeltop.services.drafter_benchmark import (
     DrafterBenchmarkOperationError,
     DrafterBenchmarkService,
     PendingDrafterBenchmark,
+    SpeculativeTelemetryReader,
 )
 from modeltop.services.generation import (
     GenerationFailed,
@@ -125,6 +127,12 @@ from modeltop.state import (
     ApplicationStateStore,
     initial_application_state,
 )
+from modeltop.theme import (
+    CATPPUCCIN_MOCHA_CSS_VARIABLES,
+    CATPPUCCIN_MOCHA_THEME,
+    ERROR,
+    PRIMARY,
+)
 from modeltop.widgets.footer import StatusFooter
 from modeltop.widgets.header import HeaderBar
 from modeltop.widgets.sidebar import BenchmarkSidebar
@@ -137,7 +145,7 @@ class ShortcutHelp(ModalScreen[None]):
     DEFAULT_CSS = """
     ShortcutHelp {
         align: center middle;
-        background: #0b0f14 80%;
+        background: $catppuccin-crust 80%;
     }
 
     ShortcutHelp #shortcut-help {
@@ -145,9 +153,9 @@ class ShortcutHelp(ModalScreen[None]):
         max-width: 90%;
         height: 20;
         padding: 1 2;
-        border: solid #5da9e9;
-        background: #111820;
-        color: #d8dee9;
+        border: solid $border-blurred;
+        background: $catppuccin-base;
+        color: $foreground;
         text-align: left;
         text-wrap: nowrap;
         text-overflow: clip;
@@ -172,7 +180,7 @@ class ShortcutHelp(ModalScreen[None]):
             "?  Toggle help\n"
             "Q  Quit outside inputs · Ctrl+Q always quit\n"
         )
-        shortcuts.stylize("#5da9e9 bold", 0, len("KEYBOARD SHORTCUTS"))
+        shortcuts.stylize(f"{PRIMARY} bold", 0, len("KEYBOARD SHORTCUTS"))
         yield Static(shortcuts, id="shortcut-help")
 
     def action_quit_app(self) -> None:
@@ -186,7 +194,7 @@ class ConfigurationErrorScreen(Screen[None]):
     DEFAULT_CSS = """
     ConfigurationErrorScreen {
         align: center middle;
-        background: #0b0f14;
+        background: $background;
     }
 
     ConfigurationErrorScreen #configuration-error {
@@ -194,9 +202,9 @@ class ConfigurationErrorScreen(Screen[None]):
         max-width: 90%;
         height: auto;
         padding: 1 2;
-        border: solid #e06c75;
-        background: #111820;
-        color: #d8dee9;
+        border: solid $error;
+        background: $catppuccin-base;
+        color: $foreground;
         text-align: center;
         text-wrap: wrap;
         text-overflow: clip;
@@ -215,7 +223,7 @@ class ConfigurationErrorScreen(Screen[None]):
             "Set MODELTOP_CONFIG or fix the selected YAML file.\n\n"
             "Q Quit"
         )
-        content.stylize("#e06c75 bold", 0, len("CONFIGURATION ERROR"))
+        content.stylize(f"{ERROR} bold", 0, len("CONFIGURATION ERROR"))
         yield Static(content, id="configuration-error")
 
 
@@ -225,15 +233,15 @@ class LargeContextConfirmation(ModalScreen[bool]):
     DEFAULT_CSS = """
     LargeContextConfirmation {
         align: center middle;
-        background: #0b0f14 80%;
+        background: $catppuccin-crust 80%;
     }
     LargeContextConfirmation #large-context-dialog {
         width: 64;
         max-width: 90%;
         height: auto;
         padding: 1 2;
-        border: solid #e5c07b;
-        background: #111820;
+        border: solid $warning;
+        background: $catppuccin-base;
     }
     LargeContextConfirmation #large-context-actions {
         height: 3;
@@ -281,15 +289,15 @@ class FullToolCallingConfirmation(ModalScreen[bool]):
     DEFAULT_CSS = """
     FullToolCallingConfirmation {
         align: center middle;
-        background: #0b0f14 80%;
+        background: $catppuccin-crust 80%;
     }
     FullToolCallingConfirmation #full-tool-calling-dialog {
         width: 68;
         max-width: 90%;
         height: auto;
         padding: 1 2;
-        border: solid #e5c07b;
-        background: #111820;
+        border: solid $warning;
+        background: $catppuccin-base;
     }
     FullToolCallingConfirmation #full-tool-calling-actions {
         height: 3;
@@ -335,20 +343,21 @@ class ModelTopApp(App[None]):
     """The ModelTop terminal dashboard application."""
 
     TITLE = DEFAULT_TITLE
+    theme: Reactive[str] = Reactive(CATPPUCCIN_MOCHA_THEME)
     AUTO_FOCUS = "#sidebar-menu"
     CSS = """
     Screen {
-        background: #0b0f14;
-        color: #d8dee9;
+        background: $background;
+        color: $foreground;
         overflow: hidden;
     }
 
     .warning {
-        color: #e5c07b;
+        color: $warning;
     }
 
     .error {
-        color: #e06c75;
+        color: $error;
     }
 
     #workspace-switcher {
@@ -368,6 +377,10 @@ class ModelTopApp(App[None]):
         Binding("ctrl+k", "clear_chat", "Clear chat", show=False),
         Binding("ctrl+g", "toggle_chat_settings", "Chat settings", show=False),
     ]
+
+    def get_theme_variable_defaults(self) -> dict[str, str]:
+        """Return ModelTop-specific extensions to Textual's active theme."""
+        return dict(CATPPUCCIN_MOCHA_CSS_VARIABLES)
 
     def __init__(
         self,
@@ -513,11 +526,17 @@ class ModelTopApp(App[None]):
                 self._handle_dashboard_state_change,
                 upstream_runner=tool_calling_runner,
             )
+        speculative_telemetry_reader = (
+            cast(SpeculativeTelemetryReader, api_client)
+            if callable(getattr(api_client, "get_vllm_speculative_counters", None))
+            else None
+        )
         self._drafter_service = DrafterBenchmarkService(
             self._generation_service,
             self._state_store,
             self._server,
             self._handle_dashboard_state_change,
+            speculative_telemetry_reader=speculative_telemetry_reader,
         )
         if hardware_enabled:
             self._hardware_monitor = HardwareMonitor(

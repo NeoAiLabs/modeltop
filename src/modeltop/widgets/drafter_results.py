@@ -38,11 +38,11 @@ class DrafterResultsPanel(VerticalScroll):
         width: 1fr;
         height: 1fr;
         padding: 0 1;
-        background: #0f151d;
+        background: $catppuccin-base;
     }
     DrafterResultsPanel .section-title {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
     DrafterResultsPanel #drafter-result-summary { height: auto; }

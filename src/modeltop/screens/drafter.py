@@ -15,7 +15,7 @@ class DrafterView(Vertical):
     """Switch between configuration, live progress, and latest terminal result."""
 
     DEFAULT_CSS = """
-    DrafterView { width: 1fr; height: 1fr; background: #0f151d; }
+    DrafterView { width: 1fr; height: 1fr; background: $catppuccin-base; }
     DrafterView #drafter-view-switcher { width: 1fr; height: 1fr; }
     """
 

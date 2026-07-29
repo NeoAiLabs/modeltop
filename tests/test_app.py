@@ -2,16 +2,21 @@
 
 import asyncio
 import errno
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from io import StringIO
 from pathlib import Path
 
 import httpx
 import pytest
+from rich.console import Console
 from rich.text import Text
+from textual import constants as textual_constants
 from textual.containers import Horizontal
 from textual.pilot import Pilot
-from textual.widgets import OptionList, Static
+from textual.widget import Widget
+from textual.widgets import DataTable, OptionList, Static
 from textual.widgets._toast import Toast
 
 import modeltop
@@ -36,9 +41,18 @@ from modeltop.widgets.sidebar import BenchmarkSidebar
 from modeltop.widgets.workspace import Workspace
 
 
-def _plain_render(widget: Static) -> str:
+def _plain_render(widget: Widget) -> str:
+    if isinstance(widget, DataTable):
+        return "\n".join(
+            widget.render_line(line).text for line in range(widget.size.height)
+        )
     rendered = widget.render()
-    return rendered.plain if isinstance(rendered, Text) else str(rendered)
+    if isinstance(rendered, Text):
+        return rendered.plain
+    output = StringIO()
+    console = Console(file=output, width=widget.size.width or 120, color_system=None)
+    console.print(rendered)
+    return output.getvalue()
 
 
 def _plain_prompt(prompt: object) -> str:
@@ -234,6 +248,48 @@ def test_package_metadata_and_application_class() -> None:
     assert ModelTopApp.__name__ == "ModelTopApp"
     assert APP_NAME == "ModelTop"
     assert PACKAGE_VERSION == "0.1.0"
+
+
+def test_dashboard_uses_catppuccin_mocha_visual_theme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rendered dashboard surfaces resolve the Catppuccin Mocha palette."""
+
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setattr(textual_constants, "COLOR_SYSTEM", "truecolor")
+
+    async def scenario() -> None:
+        transport = _ScriptedTransport(
+            [
+                httpx.Response(
+                    200,
+                    json={"data": [{"id": "org/beta"}, {"id": "org/alpha"}]},
+                )
+            ]
+        )
+        app = _app_with_transport(transport)
+        async with app.run_test(size=(100, 30)) as pilot:
+            await _wait_for_status(app, pilot, ServerStatus.ONLINE)
+            menu = app.query_one("#sidebar-menu", OptionList)
+            menu.focus()
+            await pilot.press("down", "enter")
+            await pilot.pause()
+            svg = app.export_screenshot(simplify=True).lower()
+            rendered_colors = set(re.findall(r"#[0-9a-f]{6}", svg))
+            assert app.theme == "catppuccin-mocha"
+            for color in (
+                "#181825",
+                "#1e1e2e",
+                "#313244",
+                "#585b70",
+                "#f5c2e7",
+                "#abe9b3",
+            ):
+                assert color in rendered_colors
+
+    asyncio.run(scenario())
 
 
 def test_initial_online_rendering_selector_sidebar_and_selection() -> None:

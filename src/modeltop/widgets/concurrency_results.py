@@ -14,6 +14,7 @@ from modeltop.messages import (
     ConcurrencyBenchmarkEditRequested,
     ConcurrencyBenchmarkRunAgainRequested,
 )
+from modeltop.theme import ERROR, PRIMARY, WARNING
 from modeltop.widgets.percentile_summary import PercentileSummary
 from modeltop.widgets.request_table import RequestTable
 
@@ -27,7 +28,7 @@ class ConcurrencyResultsPanel(VerticalScroll):
     ConcurrencyResultsPanel #concurrency-scaling-table { height: 10; }
     ConcurrencyResultsPanel #concurrency-result-requests { height: 1fr; min-height: 9; }
     ConcurrencyResultsPanel #concurrency-result-actions { height: 3; }
-    ConcurrencyResultsPanel .section-title { color: #5da9e9; text-style: bold; }
+    ConcurrencyResultsPanel .section-title { color: $primary; text-style: bold; }
     """
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -69,15 +70,15 @@ class ConcurrencyResultsPanel(VerticalScroll):
     def update_result(self, result: ConcurrencyBenchmarkResult) -> None:
         self._result = result
         summary = Text()
-        summary.append(result.status.value.upper(), style="#5da9e9 bold")
+        summary.append(result.status.value.upper(), style=f"{PRIMARY} bold")
         summary.append(
             f" · {result.server_name} · {result.model_id} · "
             f"{result.wall_time_seconds:.2f}s total"
         )
         if result.error:
-            summary.append(f"\n{result.error}", style="#e06c75")
+            summary.append(f"\n{result.error}", style=ERROR)
         if any(level.partial for level in result.levels):
-            summary.append("\nPartial measured results retained.", style="#e5c07b")
+            summary.append("\nPartial measured results retained.", style=WARNING)
         highest = result.levels[-1] if result.levels else None
         if highest is not None:
             summary.append(
@@ -132,7 +133,7 @@ class ConcurrencyResultsPanel(VerticalScroll):
         self.query_one(PercentileSummary).update_level(
             highest, requested_max_tokens=result.config.max_tokens
         )
-        hardware_text = Text("LOCAL HARDWARE", style="#5da9e9 bold")
+        hardware_text = Text("LOCAL HARDWARE", style=f"{PRIMARY} bold")
         hardware_text.append(" · may not represent a remote model server\n")
         if highest is None or highest.hardware_summary is None:
             hardware_text.append("Hardware metrics unavailable")
@@ -158,14 +159,14 @@ class ConcurrencyResultsPanel(VerticalScroll):
             )
         self.query_one("#concurrency-result-hardware", Static).update(hardware_text)
 
-        observations = Text("OBSERVATIONS", style="#5da9e9 bold")
+        observations = Text("OBSERVATIONS", style=f"{PRIMARY} bold")
         if result.observations:
             for observation in result.observations:
                 observations.append(f"\n· {observation.message}")
         else:
             observations.append("\nNo cross-level scaling observation available.")
         for warning in result.warnings:
-            observations.append(f"\nWarning: {warning}", style="#e5c07b")
+            observations.append(f"\nWarning: {warning}", style=WARNING)
         self.query_one("#concurrency-result-observations", Static).update(observations)
 
         request_table = self.query_one("#concurrency-result-requests", RequestTable)

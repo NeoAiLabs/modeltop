@@ -27,7 +27,7 @@ class ContextResultsPanel(VerticalScroll):
 
     DEFAULT_CSS = """
     ContextResultsPanel { width: 1fr; height: 1fr; padding: 0 1; }
-    ContextResultsPanel .section-title { height: 1; color: #5da9e9; text-style: bold; }
+    ContextResultsPanel .section-title { height: 1; color: $primary; text-style: bold; }
     ContextResultsPanel DataTable { height: auto; min-height: 5; max-height: 16; }
     ContextResultsPanel #context-result-summary { height: auto; }
     ContextResultsPanel #context-retrieval-detail { height: auto; }

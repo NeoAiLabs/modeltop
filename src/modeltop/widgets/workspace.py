@@ -21,11 +21,11 @@ class Workspace(VerticalScroll):
     Workspace {
         width: 1fr;
         height: 1fr;
-        background: #0f151d;
+        background: $catppuccin-base;
         overflow-x: hidden;
-        border-top: solid #2d3b49;
-        border-right: solid #2d3b49;
-        border-bottom: solid #2d3b49;
+        border-top: solid $border-blurred;
+        border-right: solid $border-blurred;
+        border-bottom: solid $border-blurred;
         content-align: center middle;
         text-align: center;
         text-wrap: nowrap;
@@ -48,17 +48,17 @@ class Workspace(VerticalScroll):
     }
 
     Workspace #hardware-title {
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
 
     Workspace #hardware-gpus,
     Workspace #hardware-system {
-        color: #d8dee9;
+        color: $foreground;
     }
 
     Workspace #hardware-status {
-        color: #7f8c9a;
+        color: $catppuccin-muted;
         margin-bottom: 1;
     }
 
@@ -66,7 +66,7 @@ class Workspace(VerticalScroll):
         width: 60;
         max-width: 90%;
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
         text-align: center;
         text-wrap: nowrap;
@@ -78,19 +78,19 @@ class Workspace(VerticalScroll):
         max-width: 90%;
         height: 8;
         padding: 0;
-        border: solid #2d3b49;
-        background: #111820;
-        color: #d8dee9;
+        border: solid $border-blurred;
+        background: $surface;
+        color: $foreground;
     }
 
     Workspace #model-selector:focus {
-        border: solid #2d3b49;
+        border: solid $border-blurred;
         background-tint: transparent;
     }
 
     Workspace #model-selector > .option-list--option-highlighted {
-        color: #ffffff;
-        background: #5da9e9;
+        color: $catppuccin-crust;
+        background: $secondary;
         text-style: none;
     }
 
@@ -98,7 +98,7 @@ class Workspace(VerticalScroll):
         width: 60;
         max-width: 90%;
         height: 1;
-        color: #d8dee9;
+        color: $foreground;
         text-align: center;
         text-wrap: nowrap;
         text-overflow: clip;

@@ -18,8 +18,8 @@ class GenerationSettingsPanel(Vertical):
         display: none;
         width: 1fr;
         height: 7;
-        border: solid #2d3b49;
-        background: #111820;
+        border: solid $border-blurred;
+        background: $catppuccin-base;
         padding: 0 1;
     }
 

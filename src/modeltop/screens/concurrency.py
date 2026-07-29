@@ -15,7 +15,7 @@ class ConcurrencyView(Vertical):
     """Switch between configuration, live progress, and latest terminal result."""
 
     DEFAULT_CSS = """
-    ConcurrencyView { width: 1fr; height: 1fr; background: #0f151d; }
+    ConcurrencyView { width: 1fr; height: 1fr; background: $catppuccin-base; }
     ConcurrencyView #concurrency-view-switcher { width: 1fr; height: 1fr; }
     """
 

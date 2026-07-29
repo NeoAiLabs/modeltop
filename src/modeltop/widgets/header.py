@@ -22,6 +22,7 @@ from modeltop.hardware.models import (
 )
 from modeltop.models import ServerConfig, format_backend_label
 from modeltop.state import ApplicationState, ServerStatus
+from modeltop.theme import ERROR, PRIMARY, SUCCESS, TEXT, WARNING
 
 
 class HeaderBar(Vertical):
@@ -31,8 +32,8 @@ class HeaderBar(Vertical):
     HeaderBar {
         width: 1fr;
         height: 6;
-        background: #111820;
-        border: solid #2d3b49;
+        background: $surface;
+        border: solid $border-blurred;
     }
 
     HeaderBar #header-title-row {
@@ -43,7 +44,7 @@ class HeaderBar(Vertical):
     HeaderBar #header-title {
         width: 1fr;
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
         text-wrap: nowrap;
         text-overflow: clip;
@@ -52,7 +53,7 @@ class HeaderBar(Vertical):
     HeaderBar #header-subtitle {
         width: auto;
         height: 1;
-        color: #7f8c9a;
+        color: $catppuccin-muted;
         text-align: right;
         text-wrap: nowrap;
         text-overflow: clip;
@@ -69,7 +70,7 @@ class HeaderBar(Vertical):
         text-align: center;
         text-wrap: nowrap;
         text-overflow: clip;
-        border-right: solid #2d3b49;
+        border-right: solid $border-blurred;
     }
 
     HeaderBar #metric-server {
@@ -139,8 +140,8 @@ class HeaderBar(Vertical):
                 )
 
     @staticmethod
-    def _metric(label: str, value: str, value_color: str = "#d8dee9") -> Text:
-        return Text.assemble((label, "#5da9e9"), "\n", (value, value_color))
+    def _metric(label: str, value: str, value_color: str = TEXT) -> Text:
+        return Text.assemble((label, PRIMARY), "\n", (value, value_color))
 
     def update_state(
         self,
@@ -213,10 +214,10 @@ class HeaderBar(Vertical):
             else "--"
         )
         status_colors = {
-            ServerStatus.CONNECTING: "#f2cc60",
-            ServerStatus.ONLINE: "#5fd38d",
-            ServerStatus.OFFLINE: "#ef6b73",
-            ServerStatus.ERROR: "#ef6b73",
+            ServerStatus.CONNECTING: WARNING,
+            ServerStatus.ONLINE: SUCCESS,
+            ServerStatus.OFFLINE: ERROR,
+            ServerStatus.ERROR: ERROR,
         }
         snapshot = state.hardware_snapshot
         if snapshot is not None and snapshot.gpus:
@@ -274,9 +275,7 @@ class HeaderBar(Vertical):
         }
         for identifier, value in values.items():
             color = (
-                status_colors[state.server_status]
-                if identifier == "status"
-                else "#d8dee9"
+                status_colors[state.server_status] if identifier == "status" else TEXT
             )
             label = identifier.upper()
             self.query_one(f"#metric-{identifier}", Static).update(

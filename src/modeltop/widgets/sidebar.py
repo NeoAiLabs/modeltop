@@ -13,14 +13,14 @@ class BenchmarkSidebar(Vertical):
     BenchmarkSidebar {
         width: 24;
         height: 1fr;
-        background: #111820;
-        border: solid #2d3b49;
+        background: $surface;
+        border: solid $border-blurred;
     }
 
     BenchmarkSidebar #sidebar-title {
         width: 1fr;
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
         text-wrap: nowrap;
         text-overflow: clip;
@@ -32,7 +32,7 @@ class BenchmarkSidebar(Vertical):
         padding: 0;
         border: none;
         background: transparent;
-        color: #d8dee9;
+        color: $foreground;
     }
 
     BenchmarkSidebar #sidebar-menu:focus {
@@ -41,8 +41,8 @@ class BenchmarkSidebar(Vertical):
     }
 
     BenchmarkSidebar #sidebar-menu > .option-list--option-highlighted {
-        color: #ffffff;
-        background: #5da9e9;
+        color: $catppuccin-crust;
+        background: $secondary;
         text-style: none;
     }
     """

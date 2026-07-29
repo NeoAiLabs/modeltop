@@ -22,15 +22,18 @@ class ToolCallingConfigurationPanel(VerticalScroll):
     DEFAULT_CSS = """
     ToolCallingConfigurationPanel { width: 1fr; height: 1fr; padding: 0 1; }
     ToolCallingConfigurationPanel .section-title {
-        height: 1; color: #5da9e9; text-style: bold;
+        height: 1; color: $primary; text-style: bold;
     }
     ToolCallingConfigurationPanel .field-row { height: 3; width: 1fr; }
     ToolCallingConfigurationPanel .field-row Label { width: 29; padding-top: 1; }
     ToolCallingConfigurationPanel .field-row Input { width: 1fr; }
-    ToolCallingConfigurationPanel OptionList { height: 4; border: solid #2d3b49; }
-    ToolCallingConfigurationPanel .facts { height: auto; color: #8fa3b8; }
+    ToolCallingConfigurationPanel OptionList {
+        height: 4;
+        border: solid $border-blurred;
+    }
+    ToolCallingConfigurationPanel .facts { height: auto; color: $catppuccin-muted; }
     ToolCallingConfigurationPanel #tool-calling-error {
-        height: auto; color: #ef6b73;
+        height: auto; color: $error;
     }
     ToolCallingConfigurationPanel #tool-calling-run { margin: 1 0; }
     """

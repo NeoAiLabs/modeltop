@@ -26,12 +26,12 @@ class SpeedTestResultsPanel(VerticalScroll):
         width: 1fr;
         height: 1fr;
         padding: 0 1;
-        background: #0f151d;
+        background: $catppuccin-base;
         overflow-x: hidden;
     }
     SpeedTestResultsPanel .result-heading {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
     SpeedTestResultsPanel #result-status,

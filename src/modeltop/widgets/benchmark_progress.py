@@ -9,6 +9,7 @@ from textual.widgets import DataTable, Static
 
 from modeltop.hardware.models import format_percentage, summarize_gpus
 from modeltop.state import ApplicationState
+from modeltop.theme import PRIMARY
 from modeltop.widgets.percentile_summary import PercentileSummary
 from modeltop.widgets.request_table import RequestTable
 
@@ -21,7 +22,7 @@ class BenchmarkProgressPanel(VerticalScroll):
     BenchmarkProgressPanel #concurrency-progress-summary { height: auto; }
     BenchmarkProgressPanel #concurrency-level-table { height: 8; }
     BenchmarkProgressPanel #concurrency-request-table { height: 1fr; min-height: 8; }
-    BenchmarkProgressPanel .section-title { color: #5da9e9; text-style: bold; }
+    BenchmarkProgressPanel .section-title { color: $primary; text-style: bold; }
     """
 
     def compose(self) -> ComposeResult:
@@ -59,7 +60,7 @@ class BenchmarkProgressPanel(VerticalScroll):
             else (progress.phase or lane.status.value).replace("_", " ").upper()
         )
         summary = Text()
-        summary.append(f"{phase}", style="#5da9e9 bold")
+        summary.append(f"{phase}", style=f"{PRIMARY} bold")
         if level is not None:
             summary.append(f" · CONC {level}")
         if progress.next_concurrency_level is not None:

@@ -20,14 +20,14 @@ class ChatView(Vertical):
         width: 1fr;
         height: 1fr;
         padding: 0 1;
-        background: #0b0f14;
+        background: $background;
         overflow: hidden;
     }
 
     ChatView #chat-title {
         width: 1fr;
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
         text-wrap: nowrap;
         text-overflow: clip;
@@ -36,7 +36,7 @@ class ChatView(Vertical):
     ChatView #chat-status {
         width: 1fr;
         height: 1;
-        color: #7f8c9a;
+        color: $catppuccin-muted;
         text-wrap: nowrap;
         text-overflow: clip;
     }

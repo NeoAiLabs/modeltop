@@ -34,8 +34,8 @@ class GenerationMetricsView(Static):
         display: none;
         width: 1fr;
         height: 3;
-        border: solid #2d3b49;
-        background: #111820;
+        border: solid $border-blurred;
+        background: $catppuccin-base;
         padding: 0 1;
         text-wrap: nowrap;
         text-overflow: clip;

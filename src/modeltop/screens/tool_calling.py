@@ -17,7 +17,7 @@ class ToolCallingView(Vertical):
     """Switch between configuration, progress, and one latest result."""
 
     DEFAULT_CSS = """
-    ToolCallingView { width: 1fr; height: 1fr; background: #0f151d; }
+    ToolCallingView { width: 1fr; height: 1fr; background: $catppuccin-base; }
     ToolCallingView #tool-calling-view-switcher { width: 1fr; height: 1fr; }
     """
 

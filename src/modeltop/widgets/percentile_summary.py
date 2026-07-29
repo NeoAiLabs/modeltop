@@ -4,13 +4,19 @@ from rich.text import Text
 from textual.widgets import Static
 
 from modeltop.benchmarks.models import ConcurrencyLevelResult
+from modeltop.theme import PRIMARY
 
 
 class PercentileSummary(Static):
     """Render percentiles for the current highest completed level."""
 
     DEFAULT_CSS = """
-    PercentileSummary { width: 1fr; height: auto; border: solid #2d3b49; padding: 0 1; }
+    PercentileSummary {
+        width: 1fr;
+        height: auto;
+        border: solid $border-blurred;
+        padding: 0 1;
+    }
     """
 
     @staticmethod
@@ -26,7 +32,7 @@ class PercentileSummary(Static):
         mode = level.token_count_mode.title()
         content = Text()
         content.append(
-            f"PERCENTILES · CONC {level.concurrency}\n", style="#5da9e9 bold"
+            f"PERCENTILES · CONC {level.concurrency}\n", style=f"{PRIMARY} bold"
         )
         content.append(
             "TTFT ms  "

@@ -18,11 +18,11 @@ class BenchmarkConfigurationPanel(VerticalScroll):
 
     DEFAULT_CSS = """
     BenchmarkConfigurationPanel { width: 1fr; height: 1fr; padding: 1 2; }
-    BenchmarkConfigurationPanel .section-title { color: #5da9e9; text-style: bold; }
+    BenchmarkConfigurationPanel .section-title { color: $primary; text-style: bold; }
     BenchmarkConfigurationPanel .config-row { height: 3; width: 1fr; }
     BenchmarkConfigurationPanel .config-row Label { width: 26; padding-top: 1; }
     BenchmarkConfigurationPanel .config-row Input { width: 1fr; }
-    BenchmarkConfigurationPanel TextArea { height: 5; border: solid #2d3b49; }
+    BenchmarkConfigurationPanel TextArea { height: 5; border: solid $border-blurred; }
     BenchmarkConfigurationPanel #concurrency-mode { height: 4; }
     BenchmarkConfigurationPanel #concurrency-run-plan { margin: 1 0; }
     BenchmarkConfigurationPanel .hidden { display: none; }

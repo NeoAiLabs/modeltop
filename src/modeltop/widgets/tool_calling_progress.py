@@ -13,10 +13,10 @@ class ToolCallingProgressPanel(VerticalScroll):
     DEFAULT_CSS = """
     ToolCallingProgressPanel { width: 1fr; height: 1fr; padding: 0 1; }
     ToolCallingProgressPanel .section-title {
-        height: 1; color: #5da9e9; text-style: bold;
+        height: 1; color: $primary; text-style: bold;
     }
     ToolCallingProgressPanel .progress-row { height: auto; min-height: 1; }
-    ToolCallingProgressPanel #tool-calling-progress-cancel { color: #e5c07b; }
+    ToolCallingProgressPanel #tool-calling-progress-cancel { color: $warning; }
     """
 
     def compose(self) -> ComposeResult:

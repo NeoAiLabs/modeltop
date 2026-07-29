@@ -15,12 +15,12 @@ class SpeedTestProgressPanel(VerticalScroll):
         width: 1fr;
         height: 1fr;
         padding: 0 1;
-        background: #0f151d;
+        background: $catppuccin-base;
         overflow-x: hidden;
     }
     SpeedTestProgressPanel .speed-heading {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
     SpeedTestProgressPanel #speed-progress-bar { height: 1; }
@@ -28,8 +28,8 @@ class SpeedTestProgressPanel(VerticalScroll):
     SpeedTestProgressPanel #speed-live-output {
         width: 1fr;
         height: 6;
-        border: solid #2d3b49;
-        background: #111820;
+        border: solid $border-blurred;
+        background: $catppuccin-base;
         padding: 0 1;
     }
     SpeedTestProgressPanel #speed-live-output-text {
@@ -37,7 +37,7 @@ class SpeedTestProgressPanel(VerticalScroll):
         height: auto;
     }
     SpeedTestProgressPanel #speed-run-log { height: auto; min-height: 2; }
-    SpeedTestProgressPanel #speed-cancel-hint { height: 1; color: #e5c07b; }
+    SpeedTestProgressPanel #speed-cancel-hint { height: 1; color: $warning; }
     """
 
     def compose(self) -> ComposeResult:

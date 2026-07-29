@@ -30,15 +30,15 @@ class ContextConfigurationPanel(VerticalScroll):
     DEFAULT_CSS = """
     ContextConfigurationPanel { width: 1fr; height: 1fr; padding: 0 1; }
     ContextConfigurationPanel .section-title {
-        height: 1; color: #5da9e9; text-style: bold;
+        height: 1; color: $primary; text-style: bold;
     }
     ContextConfigurationPanel .field-row { height: 3; width: 1fr; }
     ContextConfigurationPanel .field-row Label { width: 27; padding-top: 1; }
     ContextConfigurationPanel .field-row Input { width: 1fr; }
-    ContextConfigurationPanel OptionList { height: 5; border: solid #2d3b49; }
+    ContextConfigurationPanel OptionList { height: 5; border: solid $border-blurred; }
     ContextConfigurationPanel #context-base-text { height: 5; }
-    ContextConfigurationPanel .facts { height: auto; color: #8fa3b8; }
-    ContextConfigurationPanel #context-error { height: auto; color: #ef6b73; }
+    ContextConfigurationPanel .facts { height: auto; color: $catppuccin-muted; }
+    ContextConfigurationPanel #context-error { height: auto; color: $error; }
     ContextConfigurationPanel #context-run { margin: 1 0; }
     """
 

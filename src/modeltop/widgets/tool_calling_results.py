@@ -42,7 +42,7 @@ class ToolCallingResultsPanel(VerticalScroll):
     DEFAULT_CSS = """
     ToolCallingResultsPanel { width: 1fr; height: 1fr; padding: 0 1; }
     ToolCallingResultsPanel .section-title {
-        height: 1; color: #5da9e9; text-style: bold;
+        height: 1; color: $primary; text-style: bold;
     }
     ToolCallingResultsPanel #tool-calling-result-summary { height: auto; }
     ToolCallingResultsPanel DataTable { height: auto; min-height: 5; max-height: 18; }

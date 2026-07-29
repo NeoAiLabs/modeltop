@@ -15,10 +15,14 @@ class ResultsView(Vertical):
     """Show newest-first session history and reusable terminal detail."""
 
     DEFAULT_CSS = """
-    ResultsView { width: 1fr; height: 1fr; padding: 0 1; background: #0f151d; }
-    ResultsView #results-title { height: 1; color: #5da9e9; text-style: bold; }
+    ResultsView { width: 1fr; height: 1fr; padding: 0 1; background: $catppuccin-base; }
+    ResultsView #results-title { height: 1; color: $primary; text-style: bold; }
     ResultsView #results-switcher { width: 1fr; height: 1fr; }
-    ResultsView #results-list { width: 1fr; height: 1fr; border: solid #2d3b49; }
+    ResultsView #results-list {
+        width: 1fr;
+        height: 1fr;
+        border: solid $border-blurred;
+    }
     ResultsView #results-empty {
         width: 1fr;
         height: 1fr;

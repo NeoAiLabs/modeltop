@@ -26,26 +26,26 @@ class SpeedTestConfigPanel(VerticalScroll):
         height: 1fr;
         padding: 0 1;
         overflow-x: hidden;
-        background: #0f151d;
+        background: $catppuccin-base;
     }
     SpeedTestConfigPanel .section-title {
         height: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
     SpeedTestConfigPanel #speed-preset-list {
         height: 4;
         width: 100%;
-        border: solid #2d3b49;
+        border: solid $border-blurred;
         padding: 0;
-        background: #111820;
+        background: $catppuccin-base;
     }
     SpeedTestConfigPanel #speed-prompt { height: 5; }
     SpeedTestConfigPanel .config-row { height: 3; }
     SpeedTestConfigPanel .config-row Label { width: 18; padding-top: 1; }
     SpeedTestConfigPanel .config-row Input { width: 1fr; }
     SpeedTestConfigPanel #continue-row { height: 2; }
-    SpeedTestConfigPanel #speed-run-plan { height: 2; color: #7f8c9a; }
+    SpeedTestConfigPanel #speed-run-plan { height: 2; color: $catppuccin-muted; }
     SpeedTestConfigPanel #speed-start { width: 18; }
     """
 

@@ -15,7 +15,7 @@ class SpeedTestView(Vertical):
     """Switch between validated configuration, live progress, and latest result."""
 
     DEFAULT_CSS = """
-    SpeedTestView { width: 1fr; height: 1fr; background: #0f151d; }
+    SpeedTestView { width: 1fr; height: 1fr; background: $catppuccin-base; }
     SpeedTestView #speed-view-switcher { width: 1fr; height: 1fr; }
     """
 

@@ -15,7 +15,7 @@ class ContextView(Vertical):
     """Switch between Context configuration, compact progress, and latest result."""
 
     DEFAULT_CSS = """
-    ContextView { width: 1fr; height: 1fr; background: #0f151d; }
+    ContextView { width: 1fr; height: 1fr; background: $catppuccin-base; }
     ContextView #context-view-switcher { width: 1fr; height: 1fr; }
     """
 

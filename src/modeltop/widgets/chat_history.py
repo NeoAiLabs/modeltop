@@ -17,8 +17,8 @@ class ChatHistory(VerticalScroll):
         width: 1fr;
         height: 1fr;
         min-height: 4;
-        border: solid #2d3b49;
-        background: #0b0f14;
+        border: solid $border-blurred;
+        background: $background;
         padding: 0 1;
     }
 
@@ -26,7 +26,7 @@ class ChatHistory(VerticalScroll):
         width: 1fr;
         height: 1;
         margin-top: 1;
-        color: #5da9e9;
+        color: $primary;
         text-style: bold;
     }
 
@@ -34,7 +34,7 @@ class ChatHistory(VerticalScroll):
     ChatHistory .chat-system {
         width: 1fr;
         height: auto;
-        color: #d8dee9;
+        color: $foreground;
     }
 
     ChatHistory Markdown {
@@ -48,7 +48,7 @@ class ChatHistory(VerticalScroll):
         width: 1fr;
         height: 1fr;
         content-align: center middle;
-        color: #7f8c9a;
+        color: $catppuccin-muted;
     }
     """
 
