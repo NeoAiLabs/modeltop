@@ -128,10 +128,10 @@ from modeltop.state import (
     initial_application_state,
 )
 from modeltop.theme import (
-    CATPPUCCIN_MOCHA_CSS_VARIABLES,
-    CATPPUCCIN_MOCHA_THEME,
-    ERROR,
-    PRIMARY,
+    DEFAULT_CATPPUCCIN_THEME,
+    CatppuccinTheme,
+    css_variables_for,
+    palette_for,
 )
 from modeltop.widgets.footer import StatusFooter
 from modeltop.widgets.header import HeaderBar
@@ -180,7 +180,10 @@ class ShortcutHelp(ModalScreen[None]):
             "?  Toggle help\n"
             "Q  Quit outside inputs · Ctrl+Q always quit\n"
         )
-        shortcuts.stylize(f"{PRIMARY} bold", 0, len("KEYBOARD SHORTCUTS"))
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
+        shortcuts.stylize(f"{palette.primary} bold", 0, len("KEYBOARD SHORTCUTS"))
         yield Static(shortcuts, id="shortcut-help")
 
     def action_quit_app(self) -> None:
@@ -223,7 +226,10 @@ class ConfigurationErrorScreen(Screen[None]):
             "Set MODELTOP_CONFIG or fix the selected YAML file.\n\n"
             "Q Quit"
         )
-        content.stylize(f"{ERROR} bold", 0, len("CONFIGURATION ERROR"))
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
+        content.stylize(f"{palette.error} bold", 0, len("CONFIGURATION ERROR"))
         yield Static(content, id="configuration-error")
 
 
@@ -343,7 +349,7 @@ class ModelTopApp(App[None]):
     """The ModelTop terminal dashboard application."""
 
     TITLE = DEFAULT_TITLE
-    theme: Reactive[str] = Reactive(CATPPUCCIN_MOCHA_THEME)
+    theme: Reactive[str] = Reactive(DEFAULT_CATPPUCCIN_THEME)
     AUTO_FOCUS = "#sidebar-menu"
     CSS = """
     Screen {
@@ -380,7 +386,7 @@ class ModelTopApp(App[None]):
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         """Return ModelTop-specific extensions to Textual's active theme."""
-        return dict(CATPPUCCIN_MOCHA_CSS_VARIABLES)
+        return css_variables_for(cast(CatppuccinTheme, self.theme))
 
     def __init__(
         self,
@@ -391,6 +397,20 @@ class ModelTopApp(App[None]):
         tool_calling_runner: UpstreamBenchmarkRunner | None = None,
     ) -> None:
         super().__init__()
+        if config is None:
+            try:
+                loaded = load_configuration()
+            except ConfigurationLoadError as error:
+                self._configuration_error = error
+                logging.getLogger(__name__).error(
+                    "Configuration loading failed: %s", error.detail
+                )
+            else:
+                config = loaded.config
+                self._configuration_source = loaded.source_path
+        self._config = config
+        if config is not None and config.application.theme != DEFAULT_CATPPUCCIN_THEME:
+            self.theme = config.application.theme
         self._chat_view: ChatView | None = None
         self._speed_test_view: SpeedTestView | None = None
         self._concurrency_view: ConcurrencyView | None = None
@@ -399,9 +419,13 @@ class ModelTopApp(App[None]):
         self._drafter_view: DrafterView | None = None
         self._results_view: ResultsView | None = None
         self._settings_view: SettingsView | None = None
-        self._configuration_source: Path | None = None
-        self._configuration_error: ConfigurationLoadError | None = None
-        self._config: ModelTopConfig | None = None
+        self._configuration_source: Path | None = getattr(
+            self, "_configuration_source", None
+        )
+        self._configuration_error: ConfigurationLoadError | None = getattr(
+            self, "_configuration_error", None
+        )
+        self._config: ModelTopConfig | None = config
         self._server: ServerConfig | None = None
         self._api_client: OpenAICompatibleClient | None = None
         self._generation_service: GenerationService | None = None
@@ -435,19 +459,8 @@ class ModelTopApp(App[None]):
         self._pending_drafter: PendingDrafterBenchmark | None = None
         self._shutting_down = False
         self.dashboard_state: ApplicationState | None = None
-
         if config is None:
-            try:
-                loaded = load_configuration()
-            except ConfigurationLoadError as error:
-                self._configuration_error = error
-                logging.getLogger(__name__).error(
-                    "Configuration loading failed: %s", error.detail
-                )
-                return
-            config = loaded.config
-            self._configuration_source = loaded.source_path
-        self._config = config
+            return
 
         server_id = config.application.default_server
         self._server = next(

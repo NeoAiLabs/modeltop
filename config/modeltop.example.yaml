@@ -2,6 +2,7 @@ application:
   refresh_interval_seconds: 5
   request_timeout_seconds: 5
   default_server: local-vllm
+  theme: catppuccin-mocha
 hardware:
   enabled: true
   refresh_interval_seconds: 2

@@ -71,6 +71,7 @@ class SettingsView(VerticalScroll):
             f"RUNTIME\nRefresh interval: "
             f"{self._config.application.refresh_interval_seconds:g}s\n"
             f"Request timeout: {self._config.application.request_timeout_seconds:g}s\n"
+            f"THEME\n{self._config.application.theme}\n"
             f"Hardware monitoring: {hardware}\n"
             f"Hardware refresh: {self._config.hardware.refresh_interval_seconds:g}s\n\n"
             "CONCURRENCY BENCHMARK DEFAULTS\n"
@@ -121,5 +122,6 @@ class SettingsView(VerticalScroll):
             f"Per-request timeout: {tool_calling.request_timeout_seconds:g}s\n"
             "Scoring/generation controls: fixed by the benchmark integration\n\n"
             "Configuration editing remains YAML-based.\n"
+            "Edit YAML and restart ModelTop to apply a theme change.\n"
             "Use Chat · Ctrl+G for in-memory generation settings."
         )

@@ -14,7 +14,7 @@ from modeltop.messages import (
     ConcurrencyBenchmarkEditRequested,
     ConcurrencyBenchmarkRunAgainRequested,
 )
-from modeltop.theme import ERROR, PRIMARY, WARNING
+from modeltop.theme import CatppuccinTheme, palette_for
 from modeltop.widgets.percentile_summary import PercentileSummary
 from modeltop.widgets.request_table import RequestTable
 
@@ -69,16 +69,21 @@ class ConcurrencyResultsPanel(VerticalScroll):
 
     def update_result(self, result: ConcurrencyBenchmarkResult) -> None:
         self._result = result
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         summary = Text()
-        summary.append(result.status.value.upper(), style=f"{PRIMARY} bold")
+        summary.append(result.status.value.upper(), style=f"{palette.primary} bold")
         summary.append(
             f" · {result.server_name} · {result.model_id} · "
             f"{result.wall_time_seconds:.2f}s total"
         )
         if result.error:
-            summary.append(f"\n{result.error}", style=ERROR)
+            summary.append(f"\n{result.error}", style=palette.error)
         if any(level.partial for level in result.levels):
-            summary.append("\nPartial measured results retained.", style=WARNING)
+            summary.append(
+                "\nPartial measured results retained.", style=palette.warning
+            )
         highest = result.levels[-1] if result.levels else None
         if highest is not None:
             summary.append(
@@ -133,7 +138,7 @@ class ConcurrencyResultsPanel(VerticalScroll):
         self.query_one(PercentileSummary).update_level(
             highest, requested_max_tokens=result.config.max_tokens
         )
-        hardware_text = Text("LOCAL HARDWARE", style=f"{PRIMARY} bold")
+        hardware_text = Text("LOCAL HARDWARE", style=f"{palette.primary} bold")
         hardware_text.append(" · may not represent a remote model server\n")
         if highest is None or highest.hardware_summary is None:
             hardware_text.append("Hardware metrics unavailable")
@@ -159,14 +164,14 @@ class ConcurrencyResultsPanel(VerticalScroll):
             )
         self.query_one("#concurrency-result-hardware", Static).update(hardware_text)
 
-        observations = Text("OBSERVATIONS", style=f"{PRIMARY} bold")
+        observations = Text("OBSERVATIONS", style=f"{palette.primary} bold")
         if result.observations:
             for observation in result.observations:
                 observations.append(f"\n· {observation.message}")
         else:
             observations.append("\nNo cross-level scaling observation available.")
         for warning in result.warnings:
-            observations.append(f"\nWarning: {warning}", style=WARNING)
+            observations.append(f"\nWarning: {warning}", style=palette.warning)
         self.query_one("#concurrency-result-observations", Static).update(observations)
 
         request_table = self.query_one("#concurrency-result-requests", RequestTable)

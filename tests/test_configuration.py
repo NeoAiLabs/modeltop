@@ -35,6 +35,51 @@ def _yaml(server_id: str, *, api_key: str = "EMPTY") -> str:
     )
 
 
+@pytest.mark.parametrize(
+    "theme",
+    (
+        "catppuccin-latte",
+        "catppuccin-frappe",
+        "catppuccin-macchiato",
+        "catppuccin-mocha",
+    ),
+)
+def test_application_theme_accepts_supported_catppuccin_flavours(theme: str) -> None:
+    """Every registered Textual Catppuccin theme is accepted verbatim."""
+    config = ModelTopConfig.model_validate(
+        {
+            "application": {"theme": theme},
+            "servers": [
+                {"id": "server", "name": "Server", "base_url": "http://server"}
+            ],
+        }
+    )
+    assert config.application.theme == theme
+
+
+def test_application_theme_defaults_to_mocha_and_rejects_other_values() -> None:
+    """Theme is optional but constrained to ModelTop's four Catppuccin flavours."""
+    config = ModelTopConfig.model_validate(
+        {
+            "application": {},
+            "servers": [
+                {"id": "server", "name": "Server", "base_url": "http://server"}
+            ],
+        }
+    )
+    assert config.application.theme == "catppuccin-mocha"
+    with pytest.raises(ValidationError) as caught:
+        ModelTopConfig.model_validate(
+            {
+                "application": {"theme": "dracula"},
+                "servers": [
+                    {"id": "server", "name": "Server", "base_url": "http://server"}
+                ],
+            }
+        )
+    assert caught.value.errors()[0]["loc"] == ("application", "theme")
+
+
 def test_configuration_precedence_and_source_reporting(tmp_path: Path) -> None:
     """Environment, user, and repository sources are chosen in exact order."""
     home = tmp_path / "home"

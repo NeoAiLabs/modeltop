@@ -1,10 +1,12 @@
 """Compact percentile and output-length summary."""
 
+from typing import cast
+
 from rich.text import Text
 from textual.widgets import Static
 
 from modeltop.benchmarks.models import ConcurrencyLevelResult
-from modeltop.theme import PRIMARY
+from modeltop.theme import CatppuccinTheme, palette_for
 
 
 class PercentileSummary(Static):
@@ -29,10 +31,14 @@ class PercentileSummary(Static):
         if level is None:
             self.update("Percentiles unavailable")
             return
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         mode = level.token_count_mode.title()
         content = Text()
         content.append(
-            f"PERCENTILES · CONC {level.concurrency}\n", style=f"{PRIMARY} bold"
+            f"PERCENTILES · CONC {level.concurrency}\n",
+            style=f"{palette.primary} bold",
         )
         content.append(
             "TTFT ms  "

@@ -13,6 +13,7 @@ BUILTIN_CONFIG: Mapping[str, object] = {
         "refresh_interval_seconds": 5,
         "request_timeout_seconds": 5,
         "default_server": "local-vllm",
+        "theme": "catppuccin-mocha",
     },
     "hardware": {
         "enabled": True,

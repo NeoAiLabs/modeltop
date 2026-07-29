@@ -35,6 +35,7 @@ from modeltop.hardware.models import (
 )
 from modeltop.models import ModelTopConfig
 from modeltop.state import HardwareStatus, ServerStatus
+from modeltop.theme import CatppuccinTheme, palette_for
 from modeltop.widgets.footer import StatusFooter
 from modeltop.widgets.header import HeaderBar
 from modeltop.widgets.sidebar import BenchmarkSidebar
@@ -64,6 +65,7 @@ def _config(
     refresh_interval: float = 3600,
     hardware_enabled: bool = True,
     backend_hint: str | None = "vllm",
+    theme: CatppuccinTheme = "catppuccin-mocha",
 ) -> ModelTopConfig:
     return ModelTopConfig.model_validate(
         {
@@ -71,6 +73,7 @@ def _config(
                 "refresh_interval_seconds": refresh_interval,
                 "request_timeout_seconds": 5,
                 "default_server": "server",
+                "theme": theme,
             },
             "hardware": {
                 "enabled": hardware_enabled,
@@ -200,6 +203,7 @@ def _app_with_transport(
     hardware_provider: HardwareProvider | None = None,
     hardware_enabled: bool = True,
     backend_hint: str | None = "vllm",
+    theme: CatppuccinTheme = "catppuccin-mocha",
 ) -> ModelTopApp:
     client = OpenAICompatibleClient(
         "http://server/prefix/v1",
@@ -213,6 +217,7 @@ def _app_with_transport(
             refresh_interval=refresh_interval,
             hardware_enabled=hardware_enabled,
             backend_hint=backend_hint,
+            theme=theme,
         ),
         client=client,
         hardware_provider=provider,
@@ -250,11 +255,33 @@ def test_package_metadata_and_application_class() -> None:
     assert PACKAGE_VERSION == "0.1.0"
 
 
-def test_dashboard_uses_catppuccin_mocha_visual_theme(
+@pytest.mark.parametrize(
+    ("theme", "textual_colors"),
+    (
+        (
+            "catppuccin-latte",
+            ("#eff1f5", "#e6e9ef", "#7c7f93", "#8839ef", "#40a02b"),
+        ),
+        (
+            "catppuccin-frappe",
+            ("#303446", "#414559", "#838ba7", "#ca9ee6", "#a6d189"),
+        ),
+        (
+            "catppuccin-macchiato",
+            ("#24273a", "#363a4f", "#737994", "#c6a0f6", "#a6da95"),
+        ),
+        (
+            "catppuccin-mocha",
+            ("#181825", "#313244", "#585b70", "#f5c2e7", "#abe9b3"),
+        ),
+    ),
+)
+def test_dashboard_uses_configured_catppuccin_visual_theme(
     monkeypatch: pytest.MonkeyPatch,
+    theme: CatppuccinTheme,
+    textual_colors: tuple[str, str, str, str, str],
 ) -> None:
-    """Rendered dashboard surfaces resolve the Catppuccin Mocha palette."""
-
+    """Dashboard, Rich renderables, and Settings use the configured flavour."""
     monkeypatch.setenv("COLORTERM", "truecolor")
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("TERM", "xterm-256color")
@@ -269,7 +296,7 @@ def test_dashboard_uses_catppuccin_mocha_visual_theme(
                 )
             ]
         )
-        app = _app_with_transport(transport)
+        app = _app_with_transport(transport, theme=theme)
         async with app.run_test(size=(100, 30)) as pilot:
             await _wait_for_status(app, pilot, ServerStatus.ONLINE)
             menu = app.query_one("#sidebar-menu", OptionList)
@@ -278,16 +305,17 @@ def test_dashboard_uses_catppuccin_mocha_visual_theme(
             await pilot.pause()
             svg = app.export_screenshot(simplify=True).lower()
             rendered_colors = set(re.findall(r"#[0-9a-f]{6}", svg))
-            assert app.theme == "catppuccin-mocha"
-            for color in (
-                "#181825",
-                "#1e1e2e",
-                "#313244",
-                "#585b70",
-                "#f5c2e7",
-                "#abe9b3",
-            ):
+            palette = palette_for(theme)
+            assert app.theme == theme
+            for color in (*textual_colors, palette.base):
                 assert color in rendered_colors
+
+            menu.highlighted = 8
+            await pilot.press("enter")
+            await pilot.pause()
+            settings = _plain_render(app.query_one("#settings-content", Static))
+            assert f"THEME\n{theme}" in settings
+            assert "Edit YAML and restart ModelTop to apply a theme change." in settings
 
     asyncio.run(scenario())
 

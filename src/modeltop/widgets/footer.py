@@ -1,5 +1,7 @@
 """Compact live dashboard status footer."""
 
+from typing import cast
+
 from rich.text import Text
 from textual.widgets import Static
 
@@ -19,7 +21,7 @@ from modeltop.hardware.models import (
 )
 from modeltop.models import ServerConfig
 from modeltop.state import ApplicationState, ServerStatus
-from modeltop.theme import ERROR, MUTED, PRIMARY, SUCCESS, TEXT, WARNING
+from modeltop.theme import CatppuccinPalette, CatppuccinTheme, palette_for
 
 
 class StatusFooter(Static):
@@ -43,17 +45,27 @@ class StatusFooter(Static):
         super().__init__("")
         self._state: ApplicationState | None = None
         self._server: ServerConfig | None = None
+        self._palette: CatppuccinPalette | None = None
 
     def on_resize(self) -> None:
         if self._state is not None and self._server is not None:
             self.update_state(self._state, self._server)
 
-    @staticmethod
-    def _line(status: str, color: str, parts: tuple[str, ...]) -> Text:
+    @property
+    def _active_palette(self) -> CatppuccinPalette:
+        """Return the palette selected by the owning app."""
+        if self._palette is None:
+            self._palette = palette_for(
+                cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+            )
+        return self._palette
+
+    def _line(self, status: str, color: str, parts: tuple[str, ...]) -> Text:
+        palette = self._active_palette
         line = Text(status, style=color)
         for part in parts:
-            line.append(" │ ", style=MUTED)
-            line.append(part, style=TEXT)
+            line.append(" │ ", style=palette.muted)
+            line.append(part, style=palette.text)
         return line
 
     def update_state(
@@ -64,6 +76,9 @@ class StatusFooter(Static):
         """Render a clipped summary for the current state."""
         self._state = state
         self._server = server
+        self._palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         if state.tool_calling_benchmark.is_active:
             self.update(self._tool_calling_line(state))
             return
@@ -107,7 +122,7 @@ class StatusFooter(Static):
                 self.update(
                     self._line(
                         "RESULTS",
-                        PRIMARY,
+                        self._active_palette.primary,
                         (
                             f"{count} session result{'s' if count != 1 else ''}",
                             "Enter Open",
@@ -121,7 +136,7 @@ class StatusFooter(Static):
             self.update(
                 self._line(
                     "SETTINGS",
-                    PRIMARY,
+                    self._active_palette.primary,
                     ("Read only", "Edit YAML to persist changes", "Ctrl+Q Quit"),
                 )
             )
@@ -153,7 +168,7 @@ class StatusFooter(Static):
                 "Refreshing..." if state.is_refreshing else "R Refresh",
                 "Q Quit",
             )
-            color = SUCCESS
+            color = self._active_palette.success
         elif state.server_status is ServerStatus.CONNECTING:
             parts = (
                 server.name,
@@ -162,7 +177,7 @@ class StatusFooter(Static):
                 "Refreshing...",
                 "Q Quit",
             )
-            color = WARNING
+            color = self._active_palette.warning
         else:
             parts = (
                 server.name,
@@ -171,7 +186,7 @@ class StatusFooter(Static):
                 "R Retry",
                 "Q Quit",
             )
-            color = ERROR
+            color = self._active_palette.error
         self.update(self._line(status, color, parts))
 
     def _tool_calling_line(self, state: ApplicationState) -> Text:
@@ -196,7 +211,7 @@ class StatusFooter(Static):
             )
             return self._line(
                 status,
-                WARNING,
+                self._active_palette.warning,
                 (
                     f"{lane.config.suite} {completed}/{configured}",
                     outcomes,
@@ -206,9 +221,18 @@ class StatusFooter(Static):
             )
         if lane.is_terminal:
             statuses = {
-                ToolCallingBenchmarkStatus.COMPLETED: ("COMPLETE", SUCCESS),
-                ToolCallingBenchmarkStatus.CANCELLED: ("CANCELLED", WARNING),
-                ToolCallingBenchmarkStatus.ERROR: ("ERROR", ERROR),
+                ToolCallingBenchmarkStatus.COMPLETED: (
+                    "COMPLETE",
+                    self._active_palette.success,
+                ),
+                ToolCallingBenchmarkStatus.CANCELLED: (
+                    "CANCELLED",
+                    self._active_palette.warning,
+                ),
+                ToolCallingBenchmarkStatus.ERROR: (
+                    "ERROR",
+                    self._active_palette.error,
+                ),
             }
             status, color = statuses[lane.status]
             result = lane.latest_result
@@ -229,7 +253,7 @@ class StatusFooter(Static):
             )
         return self._line(
             "TOOL CALLING READY",
-            PRIMARY,
+            self._active_palette.primary,
             (
                 f"{lane.config.suite} · {lane.config.scenario_count} scenarios",
                 f"{lane.config.request_timeout_seconds:g}s timeout",
@@ -274,7 +298,7 @@ class StatusFooter(Static):
             )
             return self._line(
                 status,
-                WARNING,
+                self._active_palette.warning,
                 (
                     phase,
                     f"TTFT {ttft}",
@@ -294,13 +318,13 @@ class StatusFooter(Static):
             return self._line(
                 status,
                 (
-                    SUCCESS
+                    self._active_palette.success
                     if result.status
                     in {
                         DrafterBenchmarkStatus.COMPLETED,
                         DrafterBenchmarkStatus.COMPLETED_WITH_ERRORS,
                     }
-                    else WARNING
+                    else self._active_palette.warning
                 ),
                 (
                     f"{result.successful_runs}/{result.measured_runs} successful",
@@ -312,7 +336,7 @@ class StatusFooter(Static):
             )
         return self._line(
             "DRAFTER READY",
-            PRIMARY,
+            self._active_palette.primary,
             (
                 f"{lane.config.measured_runs} measured · "
                 f"{lane.config.max_tokens} max tokens",
@@ -340,7 +364,7 @@ class StatusFooter(Static):
                 )
                 return self._line(
                     "BETWEEN",
-                    WARNING,
+                    self._active_palette.warning,
                     (
                         f"next {progress.next_target_length if progress else '--'}",
                         remaining,
@@ -349,14 +373,23 @@ class StatusFooter(Static):
                 )
             return self._line(
                 lane.status.value.replace("_", " ").upper(),
-                WARNING,
+                self._active_palette.warning,
                 (f"target {target}", f"run {run}/{configured}", "Esc Cancel"),
             )
         if lane.is_terminal:
             statuses = {
-                ContextBenchmarkStatus.COMPLETED: ("COMPLETE", SUCCESS),
-                ContextBenchmarkStatus.CANCELLED: ("CANCELLED", WARNING),
-                ContextBenchmarkStatus.ERROR: ("ERROR", ERROR),
+                ContextBenchmarkStatus.COMPLETED: (
+                    "COMPLETE",
+                    self._active_palette.success,
+                ),
+                ContextBenchmarkStatus.CANCELLED: (
+                    "CANCELLED",
+                    self._active_palette.warning,
+                ),
+                ContextBenchmarkStatus.ERROR: (
+                    "ERROR",
+                    self._active_palette.error,
+                ),
             }
             status, color = statuses[lane.status]
             result = lane.latest_result
@@ -373,7 +406,7 @@ class StatusFooter(Static):
         lengths = ",".join(map(str, lane.config.target_lengths))
         return self._line(
             "CONTEXT READY",
-            PRIMARY,
+            self._active_palette.primary,
             (f"{lane.config.mode} {lengths}", "R Run", "E Edit"),
         )
 
@@ -394,7 +427,7 @@ class StatusFooter(Static):
                 )
                 return self._line(
                     "BETWEEN",
-                    WARNING,
+                    self._active_palette.warning,
                     (
                         f"next CONC {next_level}",
                         remaining,
@@ -421,7 +454,7 @@ class StatusFooter(Static):
             )
             return self._line(
                 status,
-                WARNING,
+                self._active_palette.warning,
                 (
                     f"CONC {level}",
                     f"{completed}/{configured} complete",
@@ -445,9 +478,18 @@ class StatusFooter(Static):
             )
             peak_text = "--" if peak is None else f"peak {peak:.1f} tok/s"
             statuses = {
-                ConcurrencyBenchmarkStatus.COMPLETED: ("COMPLETE", SUCCESS),
-                ConcurrencyBenchmarkStatus.CANCELLED: ("CANCELLED", WARNING),
-                ConcurrencyBenchmarkStatus.ERROR: ("ERROR", ERROR),
+                ConcurrencyBenchmarkStatus.COMPLETED: (
+                    "COMPLETE",
+                    self._active_palette.success,
+                ),
+                ConcurrencyBenchmarkStatus.CANCELLED: (
+                    "CANCELLED",
+                    self._active_palette.warning,
+                ),
+                ConcurrencyBenchmarkStatus.ERROR: (
+                    "ERROR",
+                    self._active_palette.error,
+                ),
             }
             status, color = statuses[lane.status]
             return self._line(
@@ -458,7 +500,7 @@ class StatusFooter(Static):
         levels = ",".join(map(str, lane.config.concurrency_levels))
         return self._line(
             "READY",
-            PRIMARY,
+            self._active_palette.primary,
             (
                 f"Concurrency {levels}",
                 f"{lane.config.requests_per_level} requests/level",
@@ -508,7 +550,7 @@ class StatusFooter(Static):
             )
             return self._line(
                 status,
-                WARNING,
+                self._active_palette.warning,
                 (
                     phase,
                     f"TTFT {ttft}",
@@ -525,13 +567,13 @@ class StatusFooter(Static):
             return self._line(
                 status,
                 (
-                    SUCCESS
+                    self._active_palette.success
                     if result.status
                     in {
                         SpeedTestStatus.COMPLETED,
                         SpeedTestStatus.COMPLETED_WITH_ERRORS,
                     }
-                    else WARNING
+                    else self._active_palette.warning
                 ),
                 (
                     f"{result.successful_runs}/{result.measured_runs} successful",
@@ -544,7 +586,7 @@ class StatusFooter(Static):
             )
         return self._line(
             "SPEED READY",
-            SUCCESS,
+            self._active_palette.success,
             (
                 "Select preset and edit fields",
                 "Enter Start",
@@ -584,7 +626,7 @@ class StatusFooter(Static):
             )
             return self._line(
                 "GENERATING",
-                WARNING,
+                self._active_palette.warning,
                 (
                     f"TTFT {ttft}",
                     f"{tokens} tokens",
@@ -596,7 +638,7 @@ class StatusFooter(Static):
         if state.generation_status is GenerationStatus.ERROR:
             return self._line(
                 "ERROR",
-                ERROR,
+                self._active_palette.error,
                 (
                     state.generation_error or "Generation failed",
                     "Enter Retry",
@@ -606,13 +648,13 @@ class StatusFooter(Static):
         if state.generation_status is GenerationStatus.CANCELLED:
             return self._line(
                 "CANCELLED",
-                WARNING,
+                self._active_palette.warning,
                 ("Partial response kept", "Enter Send", "Ctrl+Q Quit"),
             )
         if state.server_status is not ServerStatus.ONLINE:
             return self._line(
                 "OFFLINE",
-                ERROR,
+                self._active_palette.error,
                 (
                     server.name,
                     state.last_error or "Server unavailable",
@@ -624,7 +666,7 @@ class StatusFooter(Static):
         if state.selected_model_id is None:
             return self._line(
                 "NO MODEL",
-                WARNING,
+                self._active_palette.warning,
                 (
                     server.name,
                     *self._hardware_parts(state),
@@ -645,7 +687,7 @@ class StatusFooter(Static):
             status = "FALLBACK" if state.generation_notice else "READY"
             return self._line(
                 status,
-                SUCCESS,
+                self._active_palette.success,
                 (
                     server.name,
                     model,
@@ -657,7 +699,7 @@ class StatusFooter(Static):
             )
         return self._line(
             "READY",
-            SUCCESS,
+            self._active_palette.success,
             (
                 server.name,
                 model,

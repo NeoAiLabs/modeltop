@@ -7,6 +7,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from modeltop.theme import DEFAULT_CATPPUCCIN_THEME, CatppuccinTheme
+
 
 def _validate_positive_finite_interval(value: float) -> float:
     if not math.isfinite(value) or value <= 0:
@@ -34,6 +36,7 @@ class ApplicationConfig(BaseModel):
     refresh_interval_seconds: float = 5.0
     request_timeout_seconds: float = 5.0
     default_server: str | None = None
+    theme: CatppuccinTheme = DEFAULT_CATPPUCCIN_THEME
 
     @field_validator("refresh_interval_seconds", "request_timeout_seconds")
     @classmethod

@@ -9,7 +9,7 @@ from textual.widgets import DataTable, Static
 
 from modeltop.hardware.models import format_percentage, summarize_gpus
 from modeltop.state import ApplicationState
-from modeltop.theme import PRIMARY
+from modeltop.theme import CatppuccinTheme, palette_for
 from modeltop.widgets.percentile_summary import PercentileSummary
 from modeltop.widgets.request_table import RequestTable
 
@@ -59,8 +59,11 @@ class BenchmarkProgressPanel(VerticalScroll):
             if lane.status.value == "between_levels"
             else (progress.phase or lane.status.value).replace("_", " ").upper()
         )
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         summary = Text()
-        summary.append(f"{phase}", style=f"{PRIMARY} bold")
+        summary.append(f"{phase}", style=f"{palette.primary} bold")
         if level is not None:
             summary.append(f" · CONC {level}")
         if progress.next_concurrency_level is not None:

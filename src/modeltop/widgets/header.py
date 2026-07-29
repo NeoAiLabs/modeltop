@@ -1,5 +1,7 @@
 """Dashboard header with live server and model metrics."""
 
+from typing import cast
+
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
@@ -22,7 +24,7 @@ from modeltop.hardware.models import (
 )
 from modeltop.models import ServerConfig, format_backend_label
 from modeltop.state import ApplicationState, ServerStatus
-from modeltop.theme import ERROR, PRIMARY, SUCCESS, TEXT, WARNING
+from modeltop.theme import CatppuccinPalette, CatppuccinTheme, palette_for
 
 
 class HeaderBar(Vertical):
@@ -119,6 +121,9 @@ class HeaderBar(Vertical):
                 id="header-subtitle",
             )
 
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         with Horizontal(id="header-metrics"):
             for label, identifier in (
                 ("SERVER", "server"),
@@ -134,14 +139,19 @@ class HeaderBar(Vertical):
                 ("STATUS", "status"),
             ):
                 yield Static(
-                    self._metric(label, "--"),
+                    self._metric(label, "--", palette, palette.text),
                     classes="metric",
                     id=f"metric-{identifier}",
                 )
 
     @staticmethod
-    def _metric(label: str, value: str, value_color: str = TEXT) -> Text:
-        return Text.assemble((label, PRIMARY), "\n", (value, value_color))
+    def _metric(
+        label: str,
+        value: str,
+        palette: CatppuccinPalette,
+        value_color: str,
+    ) -> Text:
+        return Text.assemble((label, palette.primary), "\n", (value, value_color))
 
     def update_state(
         self,
@@ -213,11 +223,14 @@ class HeaderBar(Vertical):
             if online and state.connection_latency_ms is not None
             else "--"
         )
+        palette = palette_for(
+            cast(CatppuccinTheme, self.app.theme)  # pyright: ignore[reportUnknownMemberType]
+        )
         status_colors = {
-            ServerStatus.CONNECTING: WARNING,
-            ServerStatus.ONLINE: SUCCESS,
-            ServerStatus.OFFLINE: ERROR,
-            ServerStatus.ERROR: ERROR,
+            ServerStatus.CONNECTING: palette.warning,
+            ServerStatus.ONLINE: palette.success,
+            ServerStatus.OFFLINE: palette.error,
+            ServerStatus.ERROR: palette.error,
         }
         snapshot = state.hardware_snapshot
         if snapshot is not None and snapshot.gpus:
@@ -275,11 +288,13 @@ class HeaderBar(Vertical):
         }
         for identifier, value in values.items():
             color = (
-                status_colors[state.server_status] if identifier == "status" else TEXT
+                status_colors[state.server_status]
+                if identifier == "status"
+                else palette.text
             )
             label = identifier.upper()
             self.query_one(f"#metric-{identifier}", Static).update(
-                self._metric(label, value, color)
+                self._metric(label, value, palette, color)
             )
 
     @staticmethod
