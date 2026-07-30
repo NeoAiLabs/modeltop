@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, VerticalScroll
-from textual.widgets import Button, Input, Label, OptionList, Static, TextArea
+from textual.widgets import Button, Input, Label, OptionList, Static, Switch, TextArea
 from textual.widgets.option_list import Option
 
 from modeltop.benchmarks.models import ConcurrencyBenchmarkConfig, ConcurrencyMode
@@ -77,6 +77,9 @@ class BenchmarkConfigurationPanel(VerticalScroll):
             with Horizontal(classes="config-row"):
                 yield Label(label, id=f"{identifier}-label")
                 yield Input(id=identifier)
+        with Horizontal(classes="config-row"):
+            yield Label("Disable thinking (Qwen/vLLM)")
+            yield Switch(id="concurrency-disable-thinking")
         yield Label("Optional system prompt", classes="section-title")
         yield TextArea(
             id="concurrency-system-prompt", soft_wrap=True, show_line_numbers=False
@@ -118,6 +121,9 @@ class BenchmarkConfigurationPanel(VerticalScroll):
             config.system_prompt or ""
         )
         self.query_one("#concurrency-prompt", TextArea).text = config.prompt
+        self.query_one("#concurrency-disable-thinking", Switch).value = (
+            config.thinking_mode == "disabled"
+        )
         self.query_one("#concurrency-mode", OptionList).highlighted = (
             0 if config.mode == "fixed" else 1
         )
@@ -138,6 +144,7 @@ class BenchmarkConfigurationPanel(VerticalScroll):
 
     @on(Input.Changed)
     @on(TextArea.Changed)
+    @on(Switch.Changed)
     def draft_changed(self) -> None:
         if self._loaded:
             self._remember_level_drafts()
@@ -242,6 +249,11 @@ class BenchmarkConfigurationPanel(VerticalScroll):
                 ),
                 "stream": True,
                 "maximum_concurrency": self._maximum_concurrency,
+                "thinking_mode": (
+                    "disabled"
+                    if self.query_one("#concurrency-disable-thinking", Switch).value
+                    else "server_default"
+                ),
             }
             return ConcurrencyBenchmarkConfig.model_validate(data)
         except (ValueError, ValidationError) as error:

@@ -13,6 +13,7 @@ from textual.widgets import (
     Markdown,
     OptionList,
     Static,
+    Switch,
     TextArea,
 )
 from textual.widgets._toast import Toast
@@ -438,12 +439,14 @@ def test_cancel_clear_settings_multiline_and_focused_keys() -> None:
             assert unchanged_state.chat_session.settings.temperature == 0.7
             app.query_one("#temperature", Input).value = "1.2"
             app.query_one("#seed", Input).value = "42"
+            app.query_one("#disable-thinking", Switch).value = True
             panel.apply_settings()
             await pilot.pause()
             updated_state = app.dashboard_state
             assert updated_state is not None
             assert updated_state.chat_session.settings.temperature == 1.2
             assert updated_state.chat_session.settings.seed == 42
+            assert updated_state.chat_session.settings.enable_thinking is False
         assert transport.close_count == 1
 
     asyncio.run(scenario())

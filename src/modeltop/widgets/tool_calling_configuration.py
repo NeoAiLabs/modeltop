@@ -31,7 +31,7 @@ class ToolCallingConfigurationPanel(VerticalScroll):
         height: 4;
         border: solid $border-blurred;
     }
-    ToolCallingConfigurationPanel .facts { height: auto; color: $catppuccin-muted; }
+    ToolCallingConfigurationPanel .facts { height: auto; color: $text-secondary; }
     ToolCallingConfigurationPanel #tool-calling-error {
         height: auto; color: $error;
     }

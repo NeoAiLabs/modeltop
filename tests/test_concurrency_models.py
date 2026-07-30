@@ -491,6 +491,7 @@ def test_exact_concurrency_pydantic_field_contracts() -> None:
         "delay_between_levels_seconds",
         "stream",
         "maximum_concurrency",
+        "thinking_mode",
     )
 
 

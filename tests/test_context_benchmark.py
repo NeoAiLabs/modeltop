@@ -34,6 +34,7 @@ class _ContextClient:
     def __init__(self) -> None:
         self.calls = 0
         self.messages: list[tuple[ChatMessage, ...]] = []
+        self.settings: list[GenerationSettings] = []
 
     async def stream_chat_completion(
         self,
@@ -46,6 +47,7 @@ class _ContextClient:
         del model, timeout_seconds
         self.calls += 1
         self.messages.append(tuple(messages))
+        self.settings.append(settings)
         assert settings.stream
         marker_values = tuple(
             line.split(": ", 1)[1]
@@ -163,6 +165,7 @@ def test_fixed_context_service_omits_warmups_and_releases_reservation() -> None:
             maximum_output_tokens=8,
             request_timeout_seconds=1.0,
             delay_between_lengths_seconds=0.0,
+            thinking_mode="disabled",
         )
         pending = service.begin_benchmark(config)
         assert store.state.context_benchmark.status is ContextBenchmarkStatus.VALIDATING
@@ -179,6 +182,7 @@ def test_fixed_context_service_omits_warmups_and_releases_reservation() -> None:
             call[-1].content.endswith("Use the available response budget.")
             for call in client.messages
         )
+        assert all(settings.enable_thinking is False for settings in client.settings)
 
     asyncio.run(scenario())
 

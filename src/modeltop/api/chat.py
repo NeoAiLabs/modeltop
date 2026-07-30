@@ -80,6 +80,8 @@ def build_chat_payload(
         payload["seed"] = settings.seed
     if stream and include_usage:
         payload["stream_options"] = {"include_usage": True}
+    if settings.enable_thinking is not None:
+        payload["chat_template_kwargs"] = {"enable_thinking": settings.enable_thinking}
     return payload
 
 

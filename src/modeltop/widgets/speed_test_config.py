@@ -59,6 +59,7 @@ class SpeedTestConfigPanel(VerticalScroll):
         "seed": "#speed-seed",
         "request_timeout_seconds": "#speed-timeout",
         "continue_on_error": "#speed-continue",
+        "thinking_mode": "#speed-disable-thinking",
     }
 
     def __init__(self, *, id: str | None = None) -> None:
@@ -94,6 +95,9 @@ class SpeedTestConfigPanel(VerticalScroll):
         with Horizontal(id="continue-row", classes="config-row"):
             yield Label("Continue on error")
             yield Switch(id="speed-continue")
+        with Horizontal(id="thinking-row", classes="config-row"):
+            yield Label("Disable thinking (Qwen/vLLM)")
+            yield Switch(id="speed-disable-thinking")
         yield Static("", id="speed-run-plan", markup=False)
         yield Button("Start Speed Test", id="speed-start", variant="primary")
 
@@ -116,6 +120,9 @@ class SpeedTestConfigPanel(VerticalScroll):
         for selector, value in values.items():
             self.query_one(selector, Input).value = value
         self.query_one("#speed-continue", Switch).value = config.continue_on_error
+        self.query_one("#speed-disable-thinking", Switch).value = (
+            config.thinking_mode == "disabled"
+        )
         presets = self.query_one("#speed-preset-list", OptionList)
         presets.highlighted = ("quick", "standard", "long", "custom").index(
             config.preset
@@ -168,6 +175,11 @@ class SpeedTestConfigPanel(VerticalScroll):
             "seed": seed_text if seed_text else None,
             "request_timeout_seconds": self.query_one("#speed-timeout", Input).value,
             "continue_on_error": self.query_one("#speed-continue", Switch).value,
+            "thinking_mode": (
+                "disabled"
+                if self.query_one("#speed-disable-thinking", Switch).value
+                else "server_default"
+            ),
         }
         try:
             return SpeedTestConfig.model_validate(data)

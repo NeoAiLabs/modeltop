@@ -7,6 +7,8 @@ from typing import Literal, cast
 
 type ChatRole = Literal["system", "user", "assistant", "tool"]
 
+type ThinkingMode = Literal["server_default", "disabled"]
+
 
 @dataclass(frozen=True, slots=True)
 class ChatMessage:
@@ -33,6 +35,7 @@ class GenerationSettings:
     max_tokens: int = 1024
     seed: int | None = None
     stream: bool = True
+    enable_thinking: bool | None = None
 
     def __post_init__(self) -> None:
         temperature = cast(object, self.temperature)
@@ -40,6 +43,7 @@ class GenerationSettings:
         max_tokens = cast(object, self.max_tokens)
         seed = cast(object, self.seed)
         stream = cast(object, self.stream)
+        enable_thinking = cast(object, self.enable_thinking)
         if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
             raise TypeError("Temperature must be a number")
         if not math.isfinite(temperature) or not 0.0 <= temperature <= 2.0:
@@ -56,6 +60,8 @@ class GenerationSettings:
             raise TypeError("Seed must be an integer or empty")
         if not isinstance(stream, bool):
             raise TypeError("Stream must be a boolean")
+        if enable_thinking is not None and not isinstance(enable_thinking, bool):
+            raise TypeError("Enable thinking must be a boolean or empty")
 
         object.__setattr__(self, "temperature", float(temperature))
         object.__setattr__(self, "top_p", float(top_p))

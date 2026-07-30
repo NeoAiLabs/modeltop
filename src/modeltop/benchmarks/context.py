@@ -347,6 +347,9 @@ class ContextBenchmark(Benchmark[ContextBenchmarkResult]):
             max_tokens=effective_context_output_budget(self._config),
             seed=self._config.seed,
             stream=True,
+            enable_thinking=(
+                False if self._config.thinking_mode == "disabled" else None
+            ),
         )
         status = (
             ContextBenchmarkStatus.WARMING_UP

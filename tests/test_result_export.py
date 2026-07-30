@@ -104,6 +104,7 @@ def _result() -> SpeedTestResult:
             prompt="exported benchmark prompt",
             warmup_runs=0,
             measured_runs=1,
+            thinking_mode="disabled",
         ),
         run_results=(run,),
         ttft_ms=_stats(100),
@@ -188,6 +189,7 @@ def test_summary_formats_estimates_and_missing_values() -> None:
             "Model: ../Org/Mödél",
             "Server: Local (server) · localhost:8000 · Backend: vLLM",
             "Runs: 1/1 successful · 0/0 warm-ups attempted · 0 failed · 0 cancelled",
+            "Thinking: DISABLED (Qwen/vLLM request override)",
             "Output speed: mean ~10.00 tok/s · median ~10.00 tok/s · "
             "minimum ~10.00 tok/s · maximum ~10.00 tok/s · p95 ~10.00 tok/s",
             "TTFT: mean 100.00 ms · median 100.00 ms · p95 100.00 ms",

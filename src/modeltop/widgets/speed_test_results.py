@@ -92,11 +92,15 @@ class SpeedTestResultsPanel(VerticalScroll):
         )
         config = result.config
         seed = "--" if config.seed is None else str(config.seed)
+        thinking = (
+            "DISABLED" if config.thinking_mode == "disabled" else "SERVER DEFAULT"
+        )
         self.query_one("#result-config", Static).update(
             f"PRESET {config.preset.upper()} · WARM-UPS {config.warmup_runs} · "
             f"RUNS {config.measured_runs} · MAX TOKENS {config.max_tokens}\n"
             f"TEMPERATURE {config.temperature:g} · TOP-P {config.top_p:g} · "
             f"SEED {seed} · TIMEOUT {config.request_timeout_seconds:g}s · "
+            f"THINKING {thinking} · "
             f"CONTINUE ON ERROR {'YES' if config.continue_on_error else 'NO'}"
         )
         estimated = result.estimated_measured_metrics

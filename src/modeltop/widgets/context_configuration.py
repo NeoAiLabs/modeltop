@@ -37,7 +37,7 @@ class ContextConfigurationPanel(VerticalScroll):
     ContextConfigurationPanel .field-row Input { width: 1fr; }
     ContextConfigurationPanel OptionList { height: 5; border: solid $border-blurred; }
     ContextConfigurationPanel #context-base-text { height: 5; }
-    ContextConfigurationPanel .facts { height: auto; color: $catppuccin-muted; }
+    ContextConfigurationPanel .facts { height: auto; color: $text-secondary; }
     ContextConfigurationPanel #context-error { height: auto; color: $error; }
     ContextConfigurationPanel #context-run { margin: 1 0; }
     """
@@ -113,6 +113,7 @@ class ContextConfigurationPanel(VerticalScroll):
         yield Checkbox("Show estimated input rate", id="context-input-rate")
         yield Checkbox("Early stop at rejection boundary", id="context-early-stop")
         yield Checkbox("Continue after timeout", id="context-continue-timeout")
+        yield Checkbox("Disable thinking (Qwen/vLLM)", id="context-disable-thinking")
         yield Static("", id="context-plan-facts", classes="facts", markup=False)
         yield Static("", id="context-error", markup=False)
         yield Button("Run Context Benchmark", id="context-run", variant="primary")
@@ -171,6 +172,7 @@ class ContextConfigurationPanel(VerticalScroll):
             "#context-input-rate": config.estimated_input_rate_enabled,
             "#context-early-stop": config.early_stop_enabled,
             "#context-continue-timeout": config.continue_after_timeout,
+            "#context-disable-thinking": config.thinking_mode == "disabled",
         }
         for selector, value in checks.items():
             self.query_one(selector, Checkbox).value = value
@@ -317,6 +319,11 @@ class ContextConfigurationPanel(VerticalScroll):
                 continue_after_timeout=self.query_one(
                     "#context-continue-timeout", Checkbox
                 ).value,
+                thinking_mode=(
+                    "disabled"
+                    if self.query_one("#context-disable-thinking", Checkbox).value
+                    else "server_default"
+                ),
                 probe_start_tokens=self._integer(
                     self.query_one("#context-probe-start", Input).value, "Probe start"
                 ),

@@ -191,6 +191,37 @@ def test_exact_endpoint_headers_ordered_payload_and_seed() -> None:
     asyncio.run(scenario())
 
 
+def test_request_can_disable_qwen_thinking() -> None:
+    async def scenario() -> None:
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return _sse_response(b"data: [DONE]\n\n")
+
+        client = OpenAICompatibleClient(
+            "http://server/v1",
+            None,
+            3,
+            transport=httpx.MockTransport(handler),
+        )
+        events = [
+            event
+            async for event in client.stream_chat_completion(
+                "model",
+                (ChatMessage("user", "hello"),),
+                GenerationSettings(enable_thinking=False),
+            )
+        ]
+        assert events == [ResponseStarted(200), StreamDone()]
+        assert json.loads(requests[0].content)["chat_template_kwargs"] == {
+            "enable_thinking": False
+        }
+        await client.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_decoder_handles_every_byte_boundary_crlf_comments_and_usage() -> None:
     event = (
         ": keepalive\r\n"

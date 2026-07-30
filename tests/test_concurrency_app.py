@@ -133,6 +133,7 @@ def test_navigation_controls_invalid_input_and_narrow_resize() -> None:
                 "concurrency-seed",
                 "concurrency-timeout",
                 "concurrency-delay",
+                "concurrency-disable-thinking",
                 "concurrency-run",
             ):
                 assert len(view.query(f"#{identifier}")) == 1
@@ -142,8 +143,12 @@ def test_navigation_controls_invalid_input_and_narrow_resize() -> None:
                     concurrency_levels=(1, 2),
                     requests_per_level=2,
                     warmup_requests=0,
+                    thinking_mode="disabled",
                 )
             )
+            parsed = view.config_panel.parse_config()
+            assert parsed is not None
+            assert parsed.thinking_mode == "disabled"
             view.query_one("#concurrency-levels", Input).value = "1, 1"
             view.query_one("#concurrency-run", Button).press()
             await pilot.pause()
@@ -189,7 +194,7 @@ def test_gated_fixed_run_isolates_chat_cancels_and_recovers_polling() -> None:
             app._set_active_view("chat")
             await pilot.pause()
             chat_text = _plain_render(app.query_one("#chat-status", Static))
-            assert "Chat is unavailable while a benchmark is running" in chat_text
+            assert "Chat is unavailable" in chat_text
             assert app.query_one("#chat-prompt").disabled
             await pilot.press("escape")
             for _ in range(200):

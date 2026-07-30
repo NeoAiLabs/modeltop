@@ -1,10 +1,12 @@
 """Sequential orchestration, failure, cancellation, and reservation contracts."""
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 
 from modeltop.api.chat import (
@@ -14,8 +16,13 @@ from modeltop.api.chat import (
     StreamDone,
     UsageUpdate,
 )
+from modeltop.api.client import OpenAICompatibleClient
 from modeltop.api.errors import HTTPResponseError
-from modeltop.benchmarks.models import SpeedTestConfig, SpeedTestStatus
+from modeltop.benchmarks.models import (
+    SpeedTestConfig,
+    SpeedTestResult,
+    SpeedTestStatus,
+)
 from modeltop.chat.models import ChatMessage, GenerationSettings
 from modeltop.models import DiscoveredModel, ServerConfig
 from modeltop.services.chat import ChatOperationError, DashboardChatService
@@ -27,6 +34,27 @@ from modeltop.state import (
     ServerStatus,
     initial_application_state,
 )
+
+
+class _Chunks(httpx.AsyncByteStream):
+    def __init__(self, chunks: list[bytes]) -> None:
+        self.chunks = chunks
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            await asyncio.sleep(0)
+            yield chunk
+
+    async def aclose(self) -> None:
+        pass
+
+
+def _sse_response(*chunks: bytes) -> httpx.Response:
+    return httpx.Response(
+        200,
+        headers={"content-type": "text/event-stream; charset=utf-8"},
+        stream=_Chunks(list(chunks)),
+    )
 
 
 class _Clock:
@@ -113,7 +141,7 @@ def _store(*, online: bool = True, model: bool = True) -> ApplicationStateStore:
 
 
 def _service(
-    client: _ScriptedClient | _GatedClient,
+    client: _ScriptedClient | _GatedClient | OpenAICompatibleClient,
     store: ApplicationStateStore,
 ) -> SpeedTestService:
     server = ServerConfig(
@@ -154,6 +182,7 @@ def test_warmups_then_measured_are_strictly_sequential_and_aggregated() -> None:
             top_p=0.8,
             seed=9,
             request_timeout_seconds=12,
+            thinking_mode="disabled",
         )
         result = await service.run_test(service.begin_test(config))
 
@@ -170,6 +199,7 @@ def test_warmups_then_measured_are_strictly_sequential_and_aggregated() -> None:
             for request in client.requests
         )
         assert all(request[2].max_tokens == 77 for request in client.requests)
+        assert all(request[2].enable_thinking is False for request in client.requests)
         assert all(request[3] == 12 for request in client.requests)
         assert result.backend == "vLLM"
         assert service.state.speed_test.results == (result,)
@@ -326,5 +356,87 @@ def test_estimated_usage_and_unexpected_failure_cleanup() -> None:
         assert failed.error == "Speed Test failed"
         assert failed.run_results[0].response_character_count == len("safe partial")
         assert broken_service.state.speed_test.run_id is None
+
+    asyncio.run(scenario())
+
+
+def test_openai_compatible_streaming_metric_boundaries() -> None:
+    async def scenario() -> None:
+        responses = [
+            _sse_response(
+                b'data: {"choices":[{"delta":{"content":"estimated output"},'
+                b'"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+            ),
+            httpx.Response(
+                200,
+                headers={"content-type": "application/json"},
+                json={
+                    "choices": [
+                        {
+                            "message": {"content": "non-stream response"},
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 3,
+                        "total_tokens": 13,
+                    },
+                },
+            ),
+            _sse_response(
+                b'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n'
+                b'data: {"choices":[],"usage":{"prompt_tokens":10,'
+                b'"completion_tokens":3,"total_tokens":13}}\n\n'
+                b"data: [DONE]\n\n"
+            ),
+        ]
+        requests: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return responses.pop(0)
+
+        client = OpenAICompatibleClient(
+            "http://server/v1",
+            None,
+            3,
+            transport=httpx.MockTransport(handler),
+        )
+        results: list[SpeedTestResult] = []
+        for _ in range(3):
+            service = _service(client, _store())
+            pending = service.begin_test(
+                SpeedTestConfig(warmup_runs=0, measured_runs=1)
+            )
+            results.append(await service.run_test(pending))
+
+        for request in requests:
+            assert request.url.path == "/v1/chat/completions"
+            assert request.headers["accept"] == "text/event-stream"
+            assert json.loads(request.content)["stream"] is True
+            assert json.loads(request.content)["stream_options"] == {
+                "include_usage": True
+            }
+
+        textual = results[0]
+        assert textual.run_results[0].streamed
+        assert textual.run_results[0].completion_tokens_estimated
+        assert textual.run_results[0].output_tokens_per_second is not None
+        assert textual.output_tokens_per_second.count == 1
+
+        fallback = results[1]
+        assert not fallback.run_results[0].streamed
+        assert fallback.run_results[0].response_character_count > 0
+        assert fallback.run_results[0].completion_tokens == 3
+        assert fallback.run_results[0].output_tokens_per_second is None
+        assert fallback.output_tokens_per_second.count == 0
+        contentless = results[2]
+        assert contentless.run_results[0].streamed
+        assert contentless.run_results[0].response_character_count == 0
+        assert contentless.run_results[0].completion_tokens == 3
+        assert contentless.run_results[0].output_tokens_per_second is None
+        assert contentless.output_tokens_per_second.count == 0
+        await client.aclose()
 
     asyncio.run(scenario())

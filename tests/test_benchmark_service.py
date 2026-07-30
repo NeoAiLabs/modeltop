@@ -146,6 +146,7 @@ def test_fixed_benchmark_enforces_bound_and_preserves_request_contract() -> None
             top_p=1.0,
             seed=42,
             request_timeout_seconds=1.0,
+            thinking_mode="disabled",
             delay_between_levels_seconds=0.0,
         )
         pending = service.begin_benchmark(config)
@@ -162,6 +163,7 @@ def test_fixed_benchmark_enforces_bound_and_preserves_request_contract() -> None
         assert [request.sequence_number for request in level.requests] == list(
             range(1, 9)
         )
+        assert all(settings.enable_thinking is False for settings in client.settings)
         assert all(
             request.total_latency_seconds is not None for request in level.requests
         )

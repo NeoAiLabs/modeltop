@@ -454,6 +454,9 @@ class ConcurrencyBenchmark(Benchmark[ConcurrencyBenchmarkResult]):
                 max_tokens=self._config.max_tokens,
                 seed=self._config.seed,
                 stream=True,
+                enable_thinking=(
+                    False if self._config.thinking_mode == "disabled" else None
+                ),
             ),
             request_timeout_seconds=self._config.request_timeout_seconds,
         )

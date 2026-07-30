@@ -84,6 +84,7 @@ def test_exact_presets_and_custom_preservation() -> None:
         assert (config.temperature, config.top_p, config.seed) == (0.0, 1.0, 42)
         assert config.request_timeout_seconds == 300.0
         assert not config.continue_on_error
+        assert config.thinking_mode == "server_default"
 
     edited = SpeedTestConfig(
         prompt="edited",
@@ -119,6 +120,7 @@ def test_exact_presets_and_custom_preservation() -> None:
         ("request_timeout_seconds", 0),
         ("request_timeout_seconds", float("inf")),
         ("seed", 1.5),
+        ("thinking_mode", "enabled"),
     ],
 )
 def test_invalid_config_boundaries(field: str, value: object) -> None:

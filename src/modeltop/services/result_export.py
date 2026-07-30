@@ -277,6 +277,12 @@ def format_speed_test_summary(result: SpeedTestResult) -> str:
             f"Runs: {result.successful_runs}/{result.measured_runs} successful · "
             f"{result.attempted_warmup_runs}/{result.warmup_runs} warm-ups attempted · "
             f"{result.failed_runs} failed · {result.cancelled_runs} cancelled",
+            "Thinking: "
+            + (
+                "DISABLED (Qwen/vLLM request override)"
+                if result.config.thinking_mode == "disabled"
+                else "SERVER DEFAULT"
+            ),
             _summary_statistics(
                 "Output speed",
                 result.output_tokens_per_second,

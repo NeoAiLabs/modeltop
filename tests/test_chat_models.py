@@ -14,6 +14,8 @@ def test_generation_settings_defaults_and_boundaries() -> None:
     assert settings == GenerationSettings(0.7, 0.95, 1024, None, True)
     assert GenerationSettings(0.0, 0.0001, 1, -4)
     assert GenerationSettings(2.0, 1.0, 1, 0)
+    assert GenerationSettings(enable_thinking=False).enable_thinking is False
+    assert GenerationSettings(enable_thinking=True).enable_thinking is True
 
     for temperature in (-0.1, 2.1, float("inf"), float("nan")):
         with pytest.raises(ValueError):
@@ -27,6 +29,8 @@ def test_generation_settings_defaults_and_boundaries() -> None:
         GenerationSettings(seed=True)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         GenerationSettings(max_tokens=True)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        GenerationSettings(enable_thinking="false")  # type: ignore[arg-type]
 
 
 def test_message_validation_and_immutability() -> None:

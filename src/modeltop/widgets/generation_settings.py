@@ -48,6 +48,8 @@ class GenerationSettingsPanel(Vertical):
         with Horizontal(classes="settings-row"):
             yield Label("SHOW SYSTEM")
             yield Switch(id="show-system")
+            yield Label("DISABLE THINKING")
+            yield Switch(id="disable-thinking")
             yield Button("APPLY", id="apply-settings", variant="primary")
 
     @property
@@ -69,6 +71,9 @@ class GenerationSettingsPanel(Vertical):
         )
         self.query_one("#system-prompt", Input).value = session.system_prompt
         self.query_one("#show-system", Switch).value = session.show_system_prompt
+        self.query_one("#disable-thinking", Switch).value = (
+            settings.enable_thinking is False
+        )
 
     def set_generating(self, generating: bool) -> None:
         for control in self.query("Input, Switch, Button"):
@@ -83,6 +88,9 @@ class GenerationSettingsPanel(Vertical):
                 top_p=float(self.query_one("#top-p", Input).value),
                 max_tokens=int(self.query_one("#max-tokens", Input).value),
                 seed=int(seed_text) if seed_text else None,
+                enable_thinking=(
+                    False if self.query_one("#disable-thinking", Switch).value else None
+                ),
             )
         except (TypeError, ValueError) as error:
             self.notify(

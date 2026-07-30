@@ -217,6 +217,11 @@ class SpeedTestService:
                             max_tokens=pending.config.max_tokens,
                             seed=pending.config.seed,
                             stream=True,
+                            enable_thinking=(
+                                False
+                                if pending.config.thinking_mode == "disabled"
+                                else None
+                            ),
                         ),
                         request_timeout_seconds=(
                             pending.config.request_timeout_seconds

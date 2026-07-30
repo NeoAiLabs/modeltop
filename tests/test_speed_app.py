@@ -63,6 +63,7 @@ def test_speed_workflow_results_reopen_and_settings_navigation(
                 warmup_runs=1,
                 measured_runs=3,
                 max_tokens=32,
+                thinking_mode="disabled",
             )
             panel.load_config(config)
             panel.query_one("#speed-start", Button).press()
@@ -79,6 +80,10 @@ def test_speed_workflow_results_reopen_and_settings_navigation(
             assert all(
                 request["messages"]
                 == [{"role": "user", "content": "benchmark-only prompt"}]
+                for request in transport.chat_requests
+            )
+            assert all(
+                request["chat_template_kwargs"] == {"enable_thinking": False}
                 for request in transport.chat_requests
             )
             assert state.chat_session.messages == ()

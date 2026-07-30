@@ -26,12 +26,14 @@ def test_context_configuration_preserves_mode_drafts_and_private_values() -> Non
                     warmup_requests=0,
                     content_source="repeated_text",
                     base_text="private repeated source",
+                    thinking_mode="disabled",
                 )
             )
             fixed = panel.parse_config()
             assert fixed is not None
             assert fixed.target_lengths == (4096,)
             assert fixed.base_text == "private repeated source"
+            assert fixed.thinking_mode == "disabled"
 
             mode = panel.query_one("#context-mode", OptionList)
             mode.focus()

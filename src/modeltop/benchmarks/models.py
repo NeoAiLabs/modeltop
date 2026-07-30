@@ -9,7 +9,7 @@ from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from modeltop.chat.models import GenerationMetrics
+from modeltop.chat.models import GenerationMetrics, ThinkingMode
 from modeltop.hardware.models import HardwareSnapshot
 from modeltop.models import (
     ABSOLUTE_CONTEXT_TEST_TOKENS,
@@ -49,6 +49,7 @@ class SpeedTestConfig(BaseModel):
     seed: int | None = 42
     request_timeout_seconds: float = Field(default=300.0, gt=0.0)
     continue_on_error: bool = False
+    thinking_mode: ThinkingMode = "server_default"
 
     @field_validator("prompt")
     @classmethod
@@ -395,6 +396,7 @@ class ConcurrencyBenchmarkConfig(BaseModel):
     maximum_concurrency: int = Field(
         default=_CONCURRENCY_DEFAULTS.maximum_concurrency, ge=1
     )
+    thinking_mode: ThinkingMode = "server_default"
 
     @field_validator("concurrency_levels", mode="before")
     @classmethod
@@ -601,6 +603,7 @@ class ContextBenchmarkConfig(BaseModel):
         _CONTEXT_DEFAULTS.retrieval.truncation_detection
     )
     retrieval_regenerate_per_run: bool = _CONTEXT_DEFAULTS.retrieval.regenerate_per_run
+    thinking_mode: ThinkingMode = "server_default"
 
     @field_validator("target_lengths", mode="before")
     @classmethod
