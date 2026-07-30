@@ -370,6 +370,134 @@ class ModelTopApp(App[None]):
         width: 1fr;
         height: 1fr;
     }
+
+    #workspace-switcher GenerationSettingsPanel Input,
+    #workspace-switcher SpeedTestConfigPanel Input,
+    #workspace-switcher BenchmarkConfigurationPanel Input,
+    #workspace-switcher ContextConfigurationPanel Input,
+    #workspace-switcher ToolCallingConfigurationPanel Input,
+    #workspace-switcher DrafterConfigurationPanel Input,
+    #workspace-switcher GenerationSettingsPanel TextArea,
+    #workspace-switcher SpeedTestConfigPanel TextArea,
+    #workspace-switcher BenchmarkConfigurationPanel TextArea,
+    #workspace-switcher ContextConfigurationPanel TextArea,
+    #workspace-switcher ToolCallingConfigurationPanel TextArea,
+    #workspace-switcher DrafterConfigurationPanel TextArea {
+        background: $catppuccin-crust;
+        border: tall $catppuccin-muted 50%;
+        padding: 0 1;
+    }
+
+    #workspace-switcher GenerationSettingsPanel OptionList,
+    #workspace-switcher SpeedTestConfigPanel OptionList,
+    #workspace-switcher BenchmarkConfigurationPanel OptionList,
+    #workspace-switcher ContextConfigurationPanel OptionList,
+    #workspace-switcher ToolCallingConfigurationPanel OptionList,
+    #workspace-switcher DrafterConfigurationPanel OptionList {
+        background: $catppuccin-crust;
+        border: tall $catppuccin-muted 50% !important;
+    }
+
+    #workspace-switcher GenerationSettingsPanel Input:focus,
+    #workspace-switcher SpeedTestConfigPanel Input:focus,
+    #workspace-switcher BenchmarkConfigurationPanel Input:focus,
+    #workspace-switcher ContextConfigurationPanel Input:focus,
+    #workspace-switcher ToolCallingConfigurationPanel Input:focus,
+    #workspace-switcher DrafterConfigurationPanel Input:focus,
+    #workspace-switcher GenerationSettingsPanel TextArea:focus,
+    #workspace-switcher SpeedTestConfigPanel TextArea:focus,
+    #workspace-switcher BenchmarkConfigurationPanel TextArea:focus,
+    #workspace-switcher ContextConfigurationPanel TextArea:focus,
+    #workspace-switcher ToolCallingConfigurationPanel TextArea:focus,
+    #workspace-switcher DrafterConfigurationPanel TextArea:focus,
+    #workspace-switcher GenerationSettingsPanel OptionList:focus,
+    #workspace-switcher SpeedTestConfigPanel OptionList:focus,
+    #workspace-switcher BenchmarkConfigurationPanel OptionList:focus,
+    #workspace-switcher ContextConfigurationPanel OptionList:focus,
+    #workspace-switcher ToolCallingConfigurationPanel OptionList:focus,
+    #workspace-switcher DrafterConfigurationPanel OptionList:focus {
+        border: tall $primary;
+        background-tint: $primary 8%;
+    }
+
+    #workspace-switcher GenerationSettingsPanel OptionList > .option-list--option-highlighted,
+    #workspace-switcher SpeedTestConfigPanel OptionList > .option-list--option-highlighted,
+    #workspace-switcher BenchmarkConfigurationPanel OptionList > .option-list--option-highlighted,
+    #workspace-switcher ContextConfigurationPanel OptionList > .option-list--option-highlighted,
+    #workspace-switcher ToolCallingConfigurationPanel OptionList > .option-list--option-highlighted,
+    #workspace-switcher DrafterConfigurationPanel OptionList > .option-list--option-highlighted {
+        background: $primary 35%;
+        color: $foreground;
+    }
+
+    #workspace-switcher GenerationSettingsPanel OptionList:focus > .option-list--option-highlighted,
+    #workspace-switcher SpeedTestConfigPanel OptionList:focus > .option-list--option-highlighted,
+    #workspace-switcher BenchmarkConfigurationPanel OptionList:focus > .option-list--option-highlighted,
+    #workspace-switcher ContextConfigurationPanel OptionList:focus > .option-list--option-highlighted,
+    #workspace-switcher ToolCallingConfigurationPanel OptionList:focus > .option-list--option-highlighted,
+    #workspace-switcher DrafterConfigurationPanel OptionList:focus > .option-list--option-highlighted {
+        background: $primary;
+        color: $catppuccin-crust;
+        text-style: bold;
+    }
+
+    #workspace-switcher GenerationSettingsPanel Switch,
+    #workspace-switcher SpeedTestConfigPanel Switch,
+    #workspace-switcher BenchmarkConfigurationPanel Switch,
+    #workspace-switcher ContextConfigurationPanel Switch,
+    #workspace-switcher ToolCallingConfigurationPanel Switch,
+    #workspace-switcher DrafterConfigurationPanel Switch {
+        background: $catppuccin-crust;
+        border: tall $catppuccin-muted 50%;
+    }
+
+    #workspace-switcher GenerationSettingsPanel Switch > .switch--slider,
+    #workspace-switcher SpeedTestConfigPanel Switch > .switch--slider,
+    #workspace-switcher BenchmarkConfigurationPanel Switch > .switch--slider,
+    #workspace-switcher ContextConfigurationPanel Switch > .switch--slider,
+    #workspace-switcher ToolCallingConfigurationPanel Switch > .switch--slider,
+    #workspace-switcher DrafterConfigurationPanel Switch > .switch--slider {
+        color: $catppuccin-muted;
+    }
+
+    #workspace-switcher GenerationSettingsPanel Switch.-on > .switch--slider,
+    #workspace-switcher SpeedTestConfigPanel Switch.-on > .switch--slider,
+    #workspace-switcher BenchmarkConfigurationPanel Switch.-on > .switch--slider,
+    #workspace-switcher ContextConfigurationPanel Switch.-on > .switch--slider,
+    #workspace-switcher ToolCallingConfigurationPanel Switch.-on > .switch--slider,
+    #workspace-switcher DrafterConfigurationPanel Switch.-on > .switch--slider {
+        color: $success;
+    }
+
+    #workspace-switcher GenerationSettingsPanel Switch:focus,
+    #workspace-switcher SpeedTestConfigPanel Switch:focus,
+    #workspace-switcher BenchmarkConfigurationPanel Switch:focus,
+    #workspace-switcher ContextConfigurationPanel Switch:focus,
+    #workspace-switcher ToolCallingConfigurationPanel Switch:focus,
+    #workspace-switcher DrafterConfigurationPanel Switch:focus {
+        border: tall $primary;
+        background-tint: $primary 8%;
+    }
+
+    #workspace-switcher ContextConfigurationPanel Checkbox {
+        border: none;
+    }
+
+    #workspace-switcher ContextConfigurationPanel Checkbox > .toggle--button {
+        color: $catppuccin-muted;
+    }
+
+    #workspace-switcher ContextConfigurationPanel Checkbox.-on > .toggle--button {
+        color: $success;
+    }
+
+    #workspace-switcher ContextConfigurationPanel Checkbox:focus {
+        background: $primary 20%;
+    }
+
+    #workspace-switcher ContextConfigurationPanel Checkbox:focus > .toggle--label {
+        background: $primary 20%;
+    }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
