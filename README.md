@@ -144,6 +144,44 @@ servers:
     default_model: organization/model-name
 ```
 
+### Add and activate another server
+
+Adding a `servers` entry does not change the active endpoint. Give the entry a unique `id`, then set `application.default_server` to that exact ID before restarting ModelTop:
+
+```yaml
+application:
+  default_server: remote-example
+servers:
+  - id: remote-example
+    name: Remote Example
+    base_url: https://llm.example.com/v1
+    api_key: EMPTY  # only for servers that accept a placeholder bearer token
+    backend_hint: null
+    default_model: null
+```
+
+For authenticated endpoints, replace `EMPTY` with the actual key in the selected YAML file. `base_url` must be an absolute HTTP(S) URL; use a terminal `/v1` when that is the server's API root.
+
+Launch from the repository root to use `config/modeltop.yaml`:
+
+```bash
+uv run mtop
+```
+
+Or select one exact configuration file:
+
+```bash
+MODELTOP_CONFIG=/absolute/path/to/config.yaml uv run mtop
+```
+
+When `MODELTOP_CONFIG` is not set, an existing `~/.config/modeltop/config.yaml` shadows the repository file. To inspect what ModelTop will select before opening the TUI, run:
+
+```bash
+uv run python -c 'from pathlib import Path; from modeltop.services.configuration import load_configuration; loaded = load_configuration(cwd=Path.cwd()); selected_id = loaded.config.application.default_server; selected = next(server for server in loaded.config.servers if server.id == selected_id) if selected_id is not None else loaded.config.servers[0]; print(f"source_path={loaded.source_path}"); print(f"default_server={selected_id}"); print(f"base_url={selected.base_url}")'
+```
+
+With the example above and `MODELTOP_CONFIG` pointing at its file, the output includes that file's path, `default_server=remote-example`, and `base_url=https://llm.example.com/v1`.
+
 The URL is treated as an API root: ModelTop preserves a terminal `/v1` or appends `/v1`, then uses relative `models` and `chat/completions` paths so custom prefixes remain intact. `backend_hint` is display-only and never selects an adapter. Configurations may define multiple servers, but the dashboard monitors only `application.default_server`, or the first server when that field is `null`.
 
 Hardware metrics always describe the local machine running ModelTop; configured server URLs are never used for hardware collection. `preferred_provider: auto` initializes NVML once and falls back to non-blocking `nvidia-smi` when NVML is unavailable. Use `nvml` or `nvidia-smi` to force one provider. Either `enabled: false` or `preferred_provider: disabled` disables hardware monitoring. Files that omit `hardware` or `benchmarks` retain the defaults shown above. Concurrency levels must be positive, unique, sorted after runtime form validation, and no greater than `maximum_concurrency`; measured and warm-up counts each permit at most 1,000 requests.
