@@ -49,9 +49,11 @@ class SettingsView(VerticalScroll):
         concurrency = self._config.benchmarks.concurrency
         context = self._config.benchmarks.context
         tool_calling = self._config.benchmarks.tool_calling
+        r0b0bench = self._config.benchmarks.r0b0bench
         levels = ", ".join(str(level) for level in concurrency.default_levels)
         lengths = ", ".join(str(length) for length in context.default_lengths)
         positions = ", ".join(context.retrieval.positions)
+        r0b0bench_tests = ", ".join(r0b0bench.default_tests)
         base_text = (
             "unset"
             if context.base_text is None
@@ -81,7 +83,9 @@ class SettingsView(VerticalScroll):
             f"Maximum output tokens: {concurrency.max_tokens}\n"
             f"Request timeout: {concurrency.request_timeout_seconds:g}s\n"
             f"Delay between levels: {concurrency.delay_between_levels_seconds:g}s\n"
-            f"Safety maximum concurrency: {concurrency.maximum_concurrency}\n\n"
+            f"Safety maximum concurrency: {concurrency.maximum_concurrency}\n"
+            f"Unique prompt suffix per request: "
+            f"{concurrency.unique_prompt_suffix_per_request}\n\n"
             "CONTEXT BENCHMARK DEFAULTS\n"
             f"Mode: {context.default_mode}\n"
             f"Lengths: {lengths}\n"
@@ -121,6 +125,23 @@ class SettingsView(VerticalScroll):
             f"Suite: {tool_calling.default_suite}\n"
             f"Per-request timeout: {tool_calling.request_timeout_seconds:g}s\n"
             "Scoring/generation controls: fixed by the benchmark integration\n\n"
+            "R0B0BENCH DEFAULTS\n"
+            f"Profile: {r0b0bench.default_profile}\n"
+            f"Selected tests: {r0b0bench_tests}\n"
+            f"Per-request timeout: {r0b0bench.request_timeout_seconds:g}s\n"
+            "Upstream: r0b0bench 1.0.0rc2\n"
+            "Commit: d5ed83d8499a952546cf458e090be42ee4a48eef\n"
+            "Report schema: 2\n"
+            "Profiles core-subset/core: systems plus quality.\n"
+            "Profile systems: the seven systems tests.\n"
+            "Filtered or perf runs are diagnostic; publishing is invalid.\n"
+            "BFCL needs pinned Python and official adapter scripts.\n"
+            "Quality tests need operator-provided local JSONL datasets.\n"
+            "NIAH needs a local tokenizer and advertised maximum context.\n"
+            "HumanEval runs generated Python without a hardened sandbox.\n"
+            "Authenticated endpoints are unsupported by upstream rc2.\n"
+            "Raw evidence: ~/.local/share/modeltop/r0b0bench\n"
+            "Evidence may contain prompts, responses, or generated code.\n\n"
             "Configuration editing remains YAML-based.\n"
             "Edit YAML and restart ModelTop to apply a theme change.\n"
             "Use Chat · Ctrl+G for in-memory generation settings."

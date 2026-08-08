@@ -24,9 +24,17 @@ from scripts.mock_server import (
 
 from modeltop.benchmarks.base import BenchmarkContext
 from modeltop.benchmarks.models import (
+    R0b0benchBenchmarkConfig,
+    R0b0benchLaneResult,
+    R0b0benchLaneStatus,
     ToolCallingBenchmarkConfig,
     ToolCallingBenchmarkStatus,
 )
+from modeltop.benchmarks.r0b0bench import (
+    R0b0benchRunnerRequest,
+    SubprocessR0b0benchRunner,
+)
+from modeltop.benchmarks.r0b0bench_contract import R0b0benchLaneId
 from modeltop.benchmarks.tool_calling import ToolCallingBenchmark
 
 
@@ -662,6 +670,59 @@ def test_request_logging_excludes_payloads_headers_and_content(
     assert "unique-secret" not in output
 
 
+def test_r0b0bench_canary_mode_runs_pinned_upstream_over_real_socket(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        with _server("r0b0bench-canary") as base_url:
+            runner = SubprocessR0b0benchRunner()
+            request = R0b0benchRunnerRequest(
+                benchmark_id="r0b0bench-20260804T120000Z-deadbeef",
+                config=R0b0benchBenchmarkConfig(
+                    profile="core-subset",
+                    selected_lanes=("canary",),
+                    request_timeout_seconds=10,
+                ),
+                base_url=f"{base_url}/v1",
+                model_id="modeltop/mock-small",
+                output_root=tmp_path / "runs",
+                api_key="EMPTY",
+            )
+            started: list[R0b0benchLaneId] = []
+            finished: list[R0b0benchLaneResult] = []
+
+            async def on_started(
+                lane_id: R0b0benchLaneId,
+                _index: int,
+                _total: int,
+            ) -> None:
+                started.append(lane_id)
+
+            async def on_finished(
+                row: R0b0benchLaneResult,
+                _index: int,
+                _total: int,
+            ) -> None:
+                finished.append(row)
+
+            prepared = await runner.prepare(request)
+            report = await runner.run(prepared, on_started, on_finished)
+
+        assert started == ["canary"]
+        assert finished == list(report.lanes)
+        assert report.schema_version == 2
+        assert report.invalid_for_publish
+        assert report.infra_errors_total == 0
+        assert len(report.lanes) == 1
+        lane = report.lanes[0]
+        assert lane.status is R0b0benchLaneStatus.PASS
+        metrics = {metric.name: metric.value for metric in lane.metrics}
+        assert metrics == {"passed": True, "cases": 5}
+        assert (report.run_directory / "report.json").is_file()
+
+    asyncio.run(scenario())
+
+
 def test_environment_selects_mode_and_all_timing_knobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -765,6 +826,17 @@ def test_canonical_mode_and_context_limit_arguments(
     arguments = _arguments()
     assert arguments.chat_mode == "context-limit"
     assert arguments.context_limit == 4096
+
+
+def test_r0b0bench_blocking_mode_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["mock_server.py", "--mode", "r0b0bench-blocking"],
+    )
+    assert _arguments().chat_mode == "r0b0bench-blocking"
 
 
 @pytest.mark.parametrize(

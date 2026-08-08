@@ -43,6 +43,32 @@ logger = logging.getLogger(__name__)
 
 type Clock = Callable[[], float]
 
+DEFAULT_HTTP_MAXIMUM_CONCURRENCY = 128
+
+
+def http_limits_for_maximum_concurrency(
+    maximum_concurrency: int = DEFAULT_HTTP_MAXIMUM_CONCURRENCY,
+) -> httpx.Limits:
+    """Size the shared connection pool for peak simultaneous streams.
+
+    httpx defaults keep only 20 keepalive connections. Concurrency levels above
+    that queue client-side even when the worker pool admits more work. Match the
+    product safety ceiling and keep a small headroom for discovery traffic.
+    """
+
+    if type(maximum_concurrency) is not int:
+        raise TypeError("maximum_concurrency must be an integer")
+    if maximum_concurrency < 1:
+        raise ValueError("maximum_concurrency must be positive")
+
+    # httpx.Limits defaults: max_connections=100, max_keepalive_connections=20.
+    max_connections = max(100, maximum_concurrency + 4)
+    max_keepalive = max(20, maximum_concurrency)
+    return httpx.Limits(
+        max_connections=max_connections,
+        max_keepalive_connections=max_keepalive,
+    )
+
 
 def normalize_base_url(base_url: str) -> str:
     """Normalize a configured API root to a terminal ``/v1``."""
@@ -226,19 +252,32 @@ class OpenAICompatibleClient:
         *,
         transport: httpx.AsyncBaseTransport | None = None,
         clock: Clock = time.perf_counter,
+        limits: httpx.Limits | None = None,
     ) -> None:
         headers = {"Accept": "application/json"}
         if api_key is not None and (trimmed_key := api_key.strip()):
             headers["Authorization"] = f"Bearer {trimmed_key}"
         self._clock = clock
         self._timeout_seconds = timeout_seconds
+        self._limits = (
+            limits
+            if limits is not None
+            else http_limits_for_maximum_concurrency(DEFAULT_HTTP_MAXIMUM_CONCURRENCY)
+        )
         self._client = httpx.AsyncClient(
             base_url=f"{normalize_base_url(base_url)}/",
             timeout=httpx.Timeout(timeout_seconds),
             follow_redirects=False,
             headers=headers,
             transport=transport,
+            limits=self._limits,
         )
+
+    @property
+    def limits(self) -> httpx.Limits:
+        """Return the connection pool limits used by this client."""
+
+        return self._limits
 
     async def list_models(self) -> RawModelsResponse:
         """Fetch and structurally validate the models response envelope."""

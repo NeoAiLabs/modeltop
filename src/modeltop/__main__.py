@@ -1,6 +1,6 @@
 """Run ModelTop with ``python -m modeltop``."""
 
-from modeltop.app import run
+from modeltop.cli import main
 
 if __name__ == "__main__":
-    run()
+    raise SystemExit(main())

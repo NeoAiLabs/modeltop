@@ -9,6 +9,7 @@ from modeltop.benchmarks.models import (
     ConcurrencyBenchmarkStatus,
     ContextBenchmarkStatus,
     DrafterBenchmarkStatus,
+    R0b0benchBenchmarkStatus,
     SpeedTestResult,
     SpeedTestStatus,
     ToolCallingBenchmarkStatus,
@@ -82,6 +83,9 @@ class StatusFooter(Static):
         if state.tool_calling_benchmark.is_active:
             self.update(self._tool_calling_line(state))
             return
+        if state.r0b0bench_benchmark.is_active:
+            self.update(self._r0b0bench_line(state))
+            return
         if state.drafter_benchmark.is_active:
             self.update(self._drafter_line(state))
             return
@@ -96,6 +100,9 @@ class StatusFooter(Static):
             return
         if state.active_view == "tool-calling":
             self.update(self._tool_calling_line(state))
+            return
+        if state.active_view == "r0b0bench":
+            self.update(self._r0b0bench_line(state))
             return
         if state.active_view == "drafter":
             self.update(self._drafter_line(state))
@@ -256,6 +263,73 @@ class StatusFooter(Static):
             self._active_palette.primary,
             (
                 f"{lane.config.suite} · {lane.config.scenario_count} scenarios",
+                f"{lane.config.request_timeout_seconds:g}s timeout",
+                "R Run",
+            ),
+        )
+
+    def _r0b0bench_line(self, state: ApplicationState) -> Text:
+        lane = state.r0b0bench_benchmark
+        progress = lane.progress
+        if lane.is_active:
+            completed = progress.completed_count if progress is not None else 0
+            configured = len(lane.config.selected_lanes)
+            if progress is None:
+                outcomes = "pass 0 · fail 0 · error 0"
+            else:
+                outcomes = (
+                    f"pass {progress.pass_count} · fail {progress.fail_count} · "
+                    f"error {progress.error_count + progress.not_implemented_count}"
+                )
+            status = lane.status.value.replace("_", " ").upper()
+            return self._line(
+                status,
+                self._active_palette.warning,
+                (
+                    f"{lane.config.profile} {completed}/{configured}",
+                    outcomes,
+                    "Esc Cancel",
+                ),
+            )
+        if lane.is_terminal:
+            statuses = {
+                R0b0benchBenchmarkStatus.COMPLETED: (
+                    "COMPLETE",
+                    self._active_palette.success,
+                ),
+                R0b0benchBenchmarkStatus.COMPLETED_WITH_ERRORS: (
+                    "COMPLETE WITH ERRORS",
+                    self._active_palette.warning,
+                ),
+                R0b0benchBenchmarkStatus.CANCELLED: (
+                    "CANCELLED",
+                    self._active_palette.warning,
+                ),
+                R0b0benchBenchmarkStatus.ERROR: (
+                    "ERROR",
+                    self._active_palette.error,
+                ),
+            }
+            status, color = statuses[lane.status]
+            result = lane.latest_result
+            if result is None:
+                parts = ("-- result", "R Run Again", "E Edit")
+            else:
+                passes = sum(row.status.value == "PASS" for row in result.lanes)
+                validity = "DIAGNOSTIC" if result.invalid_for_publish else "VALID"
+                parts = (
+                    f"pass {passes}/{result.selected_count}",
+                    f"infra {result.infra_errors_total}",
+                    validity,
+                    "R Run Again",
+                    "E Edit",
+                )
+            return self._line(status, color, parts)
+        return self._line(
+            "R0B0BENCH READY",
+            self._active_palette.primary,
+            (
+                f"{lane.config.profile} · {len(lane.config.selected_lanes)} selected",
                 f"{lane.config.request_timeout_seconds:g}s timeout",
                 "R Run",
             ),

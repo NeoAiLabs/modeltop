@@ -37,9 +37,10 @@ def test_configuration_fixed_and_sweep_drafts_and_run_plan() -> None:
             assert fixed is not None
             assert fixed.mode == "fixed"
             assert fixed.concurrency_levels == (4,)
-            assert "maximum 4 simultaneous" in str(
-                panel.query_one("#concurrency-run-plan").render()
-            )
+            assert fixed.unique_prompt_suffix_per_request is True
+            plan = str(panel.query_one("#concurrency-run-plan").render())
+            assert "maximum 4 simultaneous" in plan
+            assert "unique suffixes on" in plan
             mode = panel.query_one("#concurrency-mode", OptionList)
             mode.focus()
             await pilot.press("down", "enter")

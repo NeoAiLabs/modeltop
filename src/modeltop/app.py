@@ -18,7 +18,10 @@ from textual.timer import Timer
 from textual.widgets import Button, ContentSwitcher, OptionList, Static
 from textual.worker import Worker, WorkerError, WorkerState
 
-from modeltop.api.client import OpenAICompatibleClient
+from modeltop.api.client import (
+    OpenAICompatibleClient,
+    http_limits_for_maximum_concurrency,
+)
 from modeltop.benchmarks.models import (
     ConcurrencyBenchmarkConfig,
     ConcurrencyBenchmarkResult,
@@ -26,6 +29,8 @@ from modeltop.benchmarks.models import (
     ContextBenchmarkResult,
     DrafterBenchmarkConfig,
     DrafterBenchmarkResult,
+    R0b0benchBenchmarkConfig,
+    R0b0benchBenchmarkResult,
     SpeedTestConfig,
     SpeedTestResult,
     SpeedTestStatus,
@@ -34,7 +39,12 @@ from modeltop.benchmarks.models import (
     concurrency_benchmark_config_from_defaults,
     context_benchmark_config_from_defaults,
     drafter_benchmark_config_from_defaults,
+    r0b0bench_benchmark_config_from_defaults,
     tool_calling_benchmark_config_from_defaults,
+)
+from modeltop.benchmarks.r0b0bench import (
+    R0b0benchRunner,
+    SubprocessR0b0benchRunner,
 )
 from modeltop.benchmarks.tool_calling import UpstreamBenchmarkRunner
 from modeltop.config import configure_logging
@@ -42,6 +52,8 @@ from modeltop.constants import DEFAULT_TITLE
 from modeltop.events import DashboardStateChanged
 from modeltop.hardware.base import HardwareProvider
 from modeltop.messages import (
+    ArchivedResultsComparisonRequested,
+    ArchivedResultsSelectionChanged,
     ClearConversationRequested,
     ConcurrencyBenchmarkEditRequested,
     ConcurrencyBenchmarkRunAgainRequested,
@@ -53,6 +65,9 @@ from modeltop.messages import (
     DrafterBenchmarkRunAgainRequested,
     DrafterBenchmarkStartRequested,
     PromptSubmitted,
+    R0b0benchBenchmarkEditRequested,
+    R0b0benchBenchmarkRunAgainRequested,
+    R0b0benchBenchmarkStartRequested,
     SettingsSubmitted,
     SpeedTestCancelRequested,
     SpeedTestCopySummaryRequested,
@@ -69,6 +84,11 @@ from modeltop.screens.chat import ChatView
 from modeltop.screens.concurrency import ConcurrencyView
 from modeltop.screens.context import ContextView
 from modeltop.screens.drafter import DrafterView
+from modeltop.screens.r0b0bench import (
+    R0b0benchRunConfirmation,
+    R0b0benchView,
+    r0b0bench_requires_confirmation,
+)
 from modeltop.screens.results import ResultsView
 from modeltop.screens.settings import SettingsView
 from modeltop.screens.speed_test import SpeedTestView
@@ -105,6 +125,12 @@ from modeltop.services.generation import (
 )
 from modeltop.services.hardware_monitor import HardwareMonitor, HardwareRefreshResult
 from modeltop.services.model_discovery import ModelDiscoveryService
+from modeltop.services.r0b0bench import (
+    PendingR0b0benchBenchmark,
+    R0b0benchBenchmarkOperationError,
+    R0b0benchBenchmarkService,
+)
+from modeltop.services.result_archive import ResultArchive
 from modeltop.services.result_export import (
     ResultExportError,
     export_speed_test_result,
@@ -174,7 +200,7 @@ class ShortcutHelp(ModalScreen[None]):
             "Enter  Select / start / send · Shift/Alt+Enter newline\n"
             "Esc  Cancel active work / back\n"
             "R  Run or Run Again in benchmark workspaces\n"
-            "E  Edit Tool/Context/Concurrency · export Speed result\n"
+            "E  Edit active benchmark · export Speed result\n"
             "C  Copy Speed result summary\n"
             "Ctrl+K  Clear chat · Ctrl+G chat settings\n"
             "?  Toggle help\n"
@@ -420,22 +446,12 @@ class ModelTopApp(App[None]):
         background-tint: $primary 8%;
     }
 
-    #workspace-switcher GenerationSettingsPanel OptionList > .option-list--option-highlighted,
-    #workspace-switcher SpeedTestConfigPanel OptionList > .option-list--option-highlighted,
-    #workspace-switcher BenchmarkConfigurationPanel OptionList > .option-list--option-highlighted,
-    #workspace-switcher ContextConfigurationPanel OptionList > .option-list--option-highlighted,
-    #workspace-switcher ToolCallingConfigurationPanel OptionList > .option-list--option-highlighted,
-    #workspace-switcher DrafterConfigurationPanel OptionList > .option-list--option-highlighted {
+    #workspace-switcher OptionList > .option-list--option-highlighted {
         background: $primary 35%;
         color: $foreground;
     }
 
-    #workspace-switcher GenerationSettingsPanel OptionList:focus > .option-list--option-highlighted,
-    #workspace-switcher SpeedTestConfigPanel OptionList:focus > .option-list--option-highlighted,
-    #workspace-switcher BenchmarkConfigurationPanel OptionList:focus > .option-list--option-highlighted,
-    #workspace-switcher ContextConfigurationPanel OptionList:focus > .option-list--option-highlighted,
-    #workspace-switcher ToolCallingConfigurationPanel OptionList:focus > .option-list--option-highlighted,
-    #workspace-switcher DrafterConfigurationPanel OptionList:focus > .option-list--option-highlighted {
+    #workspace-switcher OptionList:focus > .option-list--option-highlighted {
         background: $primary;
         color: $catppuccin-crust;
         text-style: bold;
@@ -498,6 +514,36 @@ class ModelTopApp(App[None]):
     #workspace-switcher ContextConfigurationPanel Checkbox:focus > .toggle--label {
         background: $primary 20%;
     }
+    #workspace-switcher R0b0benchConfigurationPanel Input,
+    #workspace-switcher R0b0benchConfigurationPanel OptionList {
+        background: $catppuccin-crust;
+        border: tall $catppuccin-muted 50%;
+        padding: 0 1;
+    }
+
+    #workspace-switcher R0b0benchConfigurationPanel Input:focus,
+    #workspace-switcher R0b0benchConfigurationPanel OptionList:focus {
+        border: tall $primary;
+        background-tint: $primary 8%;
+    }
+
+    #workspace-switcher R0b0benchConfigurationPanel Checkbox {
+        border: none;
+    }
+
+    #workspace-switcher R0b0benchConfigurationPanel Checkbox > .toggle--button {
+        color: $catppuccin-muted;
+    }
+
+    #workspace-switcher R0b0benchConfigurationPanel Checkbox.-on > .toggle--button {
+        color: $success;
+    }
+
+    #workspace-switcher R0b0benchConfigurationPanel Checkbox:focus,
+    #workspace-switcher R0b0benchConfigurationPanel Checkbox:focus > .toggle--label {
+        background: $primary 20%;
+    }
+
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("q", "quit", "Quit"),
@@ -523,6 +569,7 @@ class ModelTopApp(App[None]):
         client: OpenAICompatibleClient | None = None,
         hardware_provider: HardwareProvider | None = None,
         tool_calling_runner: UpstreamBenchmarkRunner | None = None,
+        r0b0bench_runner: R0b0benchRunner | None = None,
     ) -> None:
         super().__init__()
         if config is None:
@@ -544,6 +591,7 @@ class ModelTopApp(App[None]):
         self._concurrency_view: ConcurrencyView | None = None
         self._context_view: ContextView | None = None
         self._tool_calling_view: ToolCallingView | None = None
+        self._r0b0bench_view: R0b0benchView | None = None
         self._drafter_view: DrafterView | None = None
         self._results_view: ResultsView | None = None
         self._settings_view: SettingsView | None = None
@@ -562,6 +610,7 @@ class ModelTopApp(App[None]):
         self._benchmark_service: BenchmarkService | None = None
         self._context_benchmark_service: ContextBenchmarkService | None = None
         self._tool_calling_service: ToolCallingBenchmarkService | None = None
+        self._r0b0bench_service: R0b0benchBenchmarkService | None = None
         self._drafter_service: DrafterBenchmarkService | None = None
         self._monitor: ServerMonitor | None = None
         self._state_store: ApplicationStateStore | None = None
@@ -578,12 +627,14 @@ class ModelTopApp(App[None]):
         self._tool_calling_worker: Worker[ToolCallingBenchmarkResult | None] | None = (
             None
         )
+        self._r0b0bench_worker: Worker[R0b0benchBenchmarkResult | None] | None = None
         self._drafter_worker: Worker[DrafterBenchmarkResult | None] | None = None
         self._pending_chat: PendingGeneration | None = None
         self._pending_speed_test: PendingSpeedTest | None = None
         self._pending_benchmark: PendingConcurrencyBenchmark | None = None
         self._pending_context: PendingContextBenchmark | None = None
         self._pending_tool_calling: PendingToolCallingBenchmark | None = None
+        self._pending_r0b0bench: PendingR0b0benchBenchmark | None = None
         self._pending_drafter: PendingDrafterBenchmark | None = None
         self._shutting_down = False
         self.dashboard_state: ApplicationState | None = None
@@ -598,6 +649,9 @@ class ModelTopApp(App[None]):
         hardware_enabled = (
             config.hardware.enabled and config.hardware.preferred_provider != "disabled"
         )
+        self._result_archive = ResultArchive()
+        archive_snapshot = self._result_archive.load_archive()
+
         self._state_store = ApplicationStateStore(
             initial_application_state(
                 self._server.id,
@@ -611,15 +665,22 @@ class ModelTopApp(App[None]):
                 tool_calling_config=tool_calling_benchmark_config_from_defaults(
                     config.benchmarks.tool_calling
                 ),
+                r0b0bench_config=r0b0bench_benchmark_config_from_defaults(
+                    config.benchmarks.r0b0bench
+                ),
                 drafter_config=drafter_benchmark_config_from_defaults(
                     config.benchmarks.drafter
                 ),
+                result_archive=archive_snapshot,
             )
         )
         api_client = client or OpenAICompatibleClient(
             self._server.base_url,
             self._server.api_key,
             config.application.request_timeout_seconds,
+            limits=http_limits_for_maximum_concurrency(
+                config.benchmarks.concurrency.maximum_concurrency
+            ),
         )
         self._api_client = api_client
         self._generation_service = GenerationService(api_client)
@@ -667,6 +728,16 @@ class ModelTopApp(App[None]):
                 self._handle_dashboard_state_change,
                 upstream_runner=tool_calling_runner,
             )
+        self._r0b0bench_service = R0b0benchBenchmarkService(
+            self._state_store,
+            self._server,
+            self._handle_dashboard_state_change,
+            runner=(
+                SubprocessR0b0benchRunner()
+                if r0b0bench_runner is None
+                else r0b0bench_runner
+            ),
+        )
         speculative_telemetry_reader = (
             cast(SpeculativeTelemetryReader, api_client)
             if callable(getattr(api_client, "get_vllm_speculative_counters", None))
@@ -719,6 +790,7 @@ class ModelTopApp(App[None]):
                 ConcurrencyView(id="concurrency-workspace"),
                 ContextView(id="context-workspace"),
                 ToolCallingView(id="tool-calling-workspace"),
+                R0b0benchView(id="r0b0bench-workspace"),
                 DrafterView(id="drafter-workspace"),
                 ResultsView(id="results-workspace"),
                 SettingsView(
@@ -743,6 +815,7 @@ class ModelTopApp(App[None]):
         self._concurrency_view = self.query_one(ConcurrencyView)
         self._context_view = self.query_one(ContextView)
         self._tool_calling_view = self.query_one(ToolCallingView)
+        self._r0b0bench_view = self.query_one(R0b0benchView)
         self._drafter_view = self.query_one(DrafterView)
         self._results_view = self.query_one(ResultsView)
         self._settings_view = self.query_one(SettingsView)
@@ -759,6 +832,10 @@ class ModelTopApp(App[None]):
             self._monitor.state.tool_calling_benchmark.config
         )
         self.query_one(ToolCallingView).update_state(self._monitor.state)
+        self.query_one(R0b0benchView).config_panel.load_config(
+            self._monitor.state.r0b0bench_benchmark.config
+        )
+        self.query_one(R0b0benchView).update_state(self._monitor.state)
         self.query_one(DrafterView).config_panel.load_config(
             self._monitor.state.drafter_benchmark.config
         )
@@ -791,8 +868,67 @@ class ModelTopApp(App[None]):
         self.post_message(DashboardStateChanged())
 
     def _handle_dashboard_state_change(self, state: ApplicationState) -> None:
+        state = self._archive_terminal_results(state)
+
         self.dashboard_state = state
         self.post_message(DashboardStateChanged())
+
+    def _archive_terminal_results(self, state: ApplicationState) -> ApplicationState:
+        """Persist newly published immutable terminal results exactly once."""
+        store = self._state_store
+        if store is None:
+            return state
+        results: tuple[
+            SpeedTestResult
+            | ConcurrencyBenchmarkResult
+            | ContextBenchmarkResult
+            | ToolCallingBenchmarkResult
+            | R0b0benchBenchmarkResult
+            | DrafterBenchmarkResult,
+            ...,
+        ] = (
+            *state.speed_test.results,
+            *(
+                (state.concurrency_benchmark.latest_result,)
+                if state.concurrency_benchmark.latest_result is not None
+                else ()
+            ),
+            *(
+                (state.context_benchmark.latest_result,)
+                if state.context_benchmark.latest_result is not None
+                else ()
+            ),
+            *(
+                (state.tool_calling_benchmark.latest_result,)
+                if state.tool_calling_benchmark.latest_result is not None
+                else ()
+            ),
+            *(
+                (state.r0b0bench_benchmark.latest_result,)
+                if state.r0b0bench_benchmark.latest_result is not None
+                else ()
+            ),
+            *(
+                (state.drafter_benchmark.latest_result,)
+                if state.drafter_benchmark.latest_result is not None
+                else ()
+            ),
+        )
+        snapshot = state.result_archive
+        try:
+            for result in results:
+                snapshot = self._result_archive.archive_result(
+                    result, snapshot.archive_selection
+                )
+        except ResultExportError as error:
+            self.notify(error.user_message, severity="warning")
+            return state
+        if snapshot == state.result_archive:
+            return state
+        updated = store.update(
+            lambda current: replace(current, result_archive=snapshot)
+        )
+        return updated
 
     def _render_server_state(self, state: ApplicationState) -> None:
         server = self._server
@@ -829,6 +965,7 @@ class ModelTopApp(App[None]):
         self.query_one(ConcurrencyView).update_state(state)
         self.query_one(ContextView).update_state(state)
         self.query_one(ToolCallingView).update_state(state)
+        self.query_one(R0b0benchView).update_state(state)
         self.query_one(DrafterView).update_state(state)
         self.query_one(ResultsView).update_state(state)
         self.query_one(SettingsView).update_state(state)
@@ -936,6 +1073,9 @@ class ModelTopApp(App[None]):
         if state.tool_calling_benchmark.is_active:
             self._cancel_tool_calling_benchmark()
             return
+        if state.r0b0bench_benchmark.is_active:
+            self._cancel_r0b0bench_benchmark()
+            return
         if state.drafter_benchmark.is_active:
             self._cancel_drafter_benchmark()
             return
@@ -981,6 +1121,9 @@ class ModelTopApp(App[None]):
             self.query_one(ToolCallingView).show_config(
                 state.tool_calling_benchmark.config
             )
+            return
+        if state.active_view == "r0b0bench" and state.r0b0bench_benchmark.is_terminal:
+            self.query_one(R0b0benchView).show_config(state.r0b0bench_benchmark.config)
             return
         if state.active_view == "drafter" and state.drafter_benchmark.is_terminal:
             self.query_one(DrafterView).show_config(state.drafter_benchmark.config)
@@ -1067,6 +1210,22 @@ class ModelTopApp(App[None]):
         elif pending is not None:
             service.cancel_reservation(pending)
 
+    def _cancel_r0b0bench_benchmark(self) -> None:
+        service = self._r0b0bench_service
+        pending = self._pending_r0b0bench
+        if service is None:
+            return
+        benchmark_id = pending.benchmark_id if pending is not None else None
+        service.request_cancellation(benchmark_id)
+        worker = self._r0b0bench_worker
+        if worker is not None and not worker.is_finished:
+            was_pending = worker.state is WorkerState.PENDING
+            worker.cancel()
+            if was_pending and pending is not None:
+                service.cancel_reservation(pending)
+        elif pending is not None:
+            service.cancel_reservation(pending)
+
     def _cancel_drafter_benchmark(self) -> None:
         service = self._drafter_service
         pending = self._pending_drafter
@@ -1127,6 +1286,17 @@ class ModelTopApp(App[None]):
                 )
                 if config is not None:
                     self._request_tool_calling_benchmark(config)
+            return
+        if state.active_view == "r0b0bench" and not state.r0b0bench_benchmark.is_active:
+            result = state.r0b0bench_benchmark.latest_result
+            if state.r0b0bench_benchmark.is_terminal and result is not None:
+                self._request_r0b0bench(result.config)
+            else:
+                config = self.query_one(R0b0benchView).config_panel.parse_config(
+                    notify=True
+                )
+                if config is not None:
+                    self._request_r0b0bench(config)
             return
         if state.active_view == "drafter" and not state.drafter_benchmark.is_active:
             result = state.drafter_benchmark.latest_result
@@ -1202,6 +1372,13 @@ class ModelTopApp(App[None]):
             self.query_one(ToolCallingView).show_config(
                 state.tool_calling_benchmark.config
             )
+            return
+        if (
+            state is not None
+            and state.active_view == "r0b0bench"
+            and state.r0b0bench_benchmark.is_terminal
+        ):
+            self.query_one(R0b0benchView).show_config(state.r0b0bench_benchmark.config)
             return
         if (
             state is not None
@@ -1423,6 +1600,101 @@ class ModelTopApp(App[None]):
         finally:
             if self._pending_tool_calling == pending:
                 self._pending_tool_calling = None
+            if not self._shutting_down:
+                if self._refresh_timer is not None:
+                    self._refresh_timer.reset()
+                self._launch_refresh(
+                    manual=False,
+                    preserve_online_on_failure=True,
+                )
+
+    @on(R0b0benchBenchmarkStartRequested)
+    def start_r0b0bench(self, event: R0b0benchBenchmarkStartRequested) -> None:
+        event.stop()
+        self._request_r0b0bench(event.config)
+
+    @on(R0b0benchBenchmarkRunAgainRequested)
+    def run_r0b0bench_again(self, event: R0b0benchBenchmarkRunAgainRequested) -> None:
+        event.stop()
+        state = self.dashboard_state
+        result = state.r0b0bench_benchmark.latest_result if state is not None else None
+        if result is None:
+            self.notify(
+                "r0b0bench result is no longer available.",
+                title="r0b0bench",
+                severity="error",
+            )
+            return
+        self._request_r0b0bench(result.config)
+
+    @on(R0b0benchBenchmarkEditRequested)
+    def edit_r0b0bench(self, event: R0b0benchBenchmarkEditRequested) -> None:
+        event.stop()
+        state = self.dashboard_state
+        if state is not None:
+            self.query_one(R0b0benchView).show_config(state.r0b0bench_benchmark.config)
+
+    def _request_r0b0bench(self, config: R0b0benchBenchmarkConfig) -> None:
+        if r0b0bench_requires_confirmation(config):
+            self.push_screen(
+                R0b0benchRunConfirmation(config),
+                lambda confirmed: self._start_r0b0bench(config) if confirmed else None,
+            )
+            return
+        self._start_r0b0bench(config)
+
+    def _start_r0b0bench(self, config: R0b0benchBenchmarkConfig) -> None:
+        service = self._r0b0bench_service
+        if service is None:
+            return
+        worker = self._r0b0bench_worker
+        if worker is not None and not worker.is_finished:
+            self.notify(
+                "An r0b0bench benchmark is already running.",
+                title="r0b0bench",
+                severity="error",
+            )
+            return
+        try:
+            pending = service.begin_benchmark(config)
+        except R0b0benchBenchmarkOperationError as error:
+            self.notify(error.user_message, title="r0b0bench", severity="error")
+            return
+        self._pending_r0b0bench = pending
+        self.query_one(R0b0benchView).prepare_run(config)
+        self._r0b0bench_worker = self._run_r0b0bench(pending)
+
+    @work(
+        name="r0b0bench-benchmark",
+        group="r0b0bench-benchmark",
+        exit_on_error=False,
+        exclusive=False,
+    )
+    async def _run_r0b0bench(
+        self, pending: PendingR0b0benchBenchmark
+    ) -> R0b0benchBenchmarkResult | None:
+        service = self._r0b0bench_service
+        if service is None:
+            return None
+        try:
+            return await service.run_benchmark(pending)
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            logging.getLogger(__name__).info(
+                "r0b0bench worker failed benchmark=%s exception_class=%s",
+                pending.benchmark_id,
+                type(error).__name__,
+            )
+            self.notify(
+                "r0b0bench benchmark failed",
+                title="r0b0bench",
+                severity="error",
+            )
+            raise
+        finally:
+            if self._pending_r0b0bench == pending:
+                self._pending_r0b0bench = None
             if not self._shutting_down:
                 if self._refresh_timer is not None:
                     self._refresh_timer.reset()
@@ -1889,6 +2161,7 @@ class ModelTopApp(App[None]):
             "concurrency",
             "context",
             "tool-calling",
+            "r0b0bench",
             "drafter",
             "results",
             "settings",
@@ -1921,6 +2194,12 @@ class ModelTopApp(App[None]):
             if state is not None and not state.tool_calling_benchmark.is_active:
                 self.call_after_refresh(
                     self.query_one(ToolCallingView).config_panel.focus_suite
+                )
+        elif view == "r0b0bench":
+            state = self.dashboard_state
+            if state is not None and not state.r0b0bench_benchmark.is_active:
+                self.call_after_refresh(
+                    self.query_one(R0b0benchView).config_panel.focus_profile
                 )
         elif view == "drafter":
             state = self.dashboard_state
@@ -1955,6 +2234,55 @@ class ModelTopApp(App[None]):
             )
 
         self._handle_dashboard_state_change(store.update(transform))
+
+    @on(ArchivedResultsSelectionChanged)
+    def change_archived_result_selection(
+        self, message: ArchivedResultsSelectionChanged
+    ) -> None:
+        """Commit only valid durable selection IDs to the immutable snapshot."""
+        store = self._state_store
+        if store is None:
+            return
+
+        def transform(state: ApplicationState) -> ApplicationState:
+            documents = state.result_archive.documents
+            selected = tuple(
+                result_id for result_id in message.result_ids if result_id in documents
+            )[:2]
+            if len(selected) == 2:
+                first, second = (documents[result_id] for result_id in selected)
+                if first.entry.kind != second.entry.kind:
+                    selected = (selected[0],)
+            return replace(
+                state,
+                result_archive=replace(
+                    state.result_archive, archive_selection=selected
+                ),
+            )
+
+        self._handle_dashboard_state_change(store.update(transform))
+
+    @on(ArchivedResultsComparisonRequested)
+    def show_archived_result_comparison(
+        self, message: ArchivedResultsComparisonRequested
+    ) -> None:
+        """Reject stale or cross-family comparison requests."""
+        state = self.dashboard_state
+        if state is None:
+            return
+        documents = state.result_archive.documents
+        first = documents.get(message.result_ids[0])
+        second = documents.get(message.result_ids[1])
+        if first is None or second is None or first.entry.kind != second.entry.kind:
+            self.change_archived_result_selection(
+                ArchivedResultsSelectionChanged(
+                    tuple(item for item in message.result_ids if item in documents)[:1]
+                )
+            )
+            return
+        self.change_archived_result_selection(
+            ArchivedResultsSelectionChanged(message.result_ids)
+        )
 
     @on(OptionList.OptionSelected)
     def select_discovered_model(self, event: OptionList.OptionSelected) -> None:
@@ -1996,6 +2324,22 @@ class ModelTopApp(App[None]):
         except Exception as error:
             logging.getLogger(__name__).error(
                 "Cleanup failed resource=tool-calling-reservation error=%s",
+                type(error).__name__,
+            )
+        r0b0bench_service = self._r0b0bench_service
+        r0b0bench_pending = self._pending_r0b0bench
+        try:
+            if r0b0bench_service is not None and r0b0bench_pending is not None:
+                r0b0bench_service.request_cancellation(r0b0bench_pending.benchmark_id)
+                r0b0bench_worker = self._r0b0bench_worker
+                if (
+                    r0b0bench_worker is None
+                    or r0b0bench_worker.state is WorkerState.PENDING
+                ):
+                    r0b0bench_service.cancel_reservation(r0b0bench_pending)
+        except Exception as error:
+            logging.getLogger(__name__).error(
+                "Cleanup failed resource=r0b0bench-reservation error=%s",
                 type(error).__name__,
             )
 
@@ -2078,6 +2422,7 @@ class ModelTopApp(App[None]):
 
         workers: tuple[Worker[object] | None, ...] = (
             cast(Worker[object] | None, self._tool_calling_worker),
+            cast(Worker[object] | None, self._r0b0bench_worker),
             cast(Worker[object] | None, self._drafter_worker),
             cast(Worker[object] | None, self._context_worker),
             cast(Worker[object] | None, self._benchmark_worker),

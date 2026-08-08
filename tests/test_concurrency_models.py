@@ -159,6 +159,7 @@ def test_exact_default_config_and_fixed_prompt() -> None:
     assert config.delay_between_levels_seconds == 3.0
     assert config.stream is True
     assert config.maximum_concurrency == 128
+    assert config.unique_prompt_suffix_per_request is True
 
 
 def test_defaults_conversion_copies_every_effective_yaml_value() -> None:
@@ -172,6 +173,7 @@ def test_defaults_conversion_copies_every_effective_yaml_value() -> None:
         request_timeout_seconds=45.5,
         delay_between_levels_seconds=0.25,
         maximum_concurrency=64,
+        unique_prompt_suffix_per_request=False,
     )
     config = concurrency_benchmark_config_from_defaults(defaults)
     assert config == ConcurrencyBenchmarkConfig(
@@ -189,6 +191,7 @@ def test_defaults_conversion_copies_every_effective_yaml_value() -> None:
         delay_between_levels_seconds=0.25,
         stream=True,
         maximum_concurrency=64,
+        unique_prompt_suffix_per_request=False,
     )
 
 
@@ -475,6 +478,7 @@ def test_exact_concurrency_pydantic_field_contracts() -> None:
         "request_timeout_seconds",
         "delay_between_levels_seconds",
         "maximum_concurrency",
+        "unique_prompt_suffix_per_request",
     )
     assert tuple(ConcurrencyBenchmarkConfig.model_fields) == (
         "mode",
@@ -491,6 +495,7 @@ def test_exact_concurrency_pydantic_field_contracts() -> None:
         "delay_between_levels_seconds",
         "stream",
         "maximum_concurrency",
+        "unique_prompt_suffix_per_request",
         "thinking_mode",
     )
 

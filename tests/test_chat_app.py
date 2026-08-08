@@ -230,6 +230,7 @@ def test_sidebar_ids_inline_navigation_focus_and_geometry() -> None:
                 "concurrency",
                 "context",
                 "tool-calling",
+                "r0b0bench",
                 "drafter",
                 "results",
                 "settings",

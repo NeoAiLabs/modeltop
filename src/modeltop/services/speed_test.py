@@ -104,6 +104,10 @@ class SpeedTestService:
                 raise SpeedTestOperationError(
                     "A Tool Calling benchmark is already running."
                 )
+            if state.r0b0bench_benchmark.is_active:
+                raise SpeedTestOperationError(
+                    "An r0b0bench benchmark is already running."
+                )
             if state.context_benchmark.is_active:
                 raise SpeedTestOperationError("A Context benchmark is already running.")
             if state.concurrency_benchmark.is_active:

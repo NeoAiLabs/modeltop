@@ -158,7 +158,7 @@ def test_sidebar_configure_run_results_rerun_edit_and_escape() -> None:
         async with app.run_test(size=(120, 36)) as pilot:
             await _wait_for_status(app, pilot, ServerStatus.ONLINE)
             menu = app.query_one("#sidebar-menu", OptionList)
-            menu.highlighted = 6
+            menu.highlighted = 7
             menu.focus()
             await pilot.press("enter")
             await pilot.pause()

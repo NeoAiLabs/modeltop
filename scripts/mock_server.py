@@ -67,6 +67,8 @@ type ChatMode = Literal[
     "tool-malformed-arguments",
     "tool-refusal",
     "tool-timeout",
+    "r0b0bench-canary",
+    "r0b0bench-blocking",
 ]
 _GENERATED_MODES: frozenset[ChatMode] = frozenset(
     {
@@ -252,6 +254,8 @@ class ModelsRequestHandler(BaseHTTPRequestHandler):
                 and total_requested > self.context_limit_tokens
             ):
                 time.sleep(self.timeout_delay_seconds)
+            if self.chat_mode == "r0b0bench-blocking":
+                threading.Event().wait()
             if self._serve_tool_request(
                 payload,
                 raw_messages,
@@ -273,6 +277,9 @@ class ModelsRequestHandler(BaseHTTPRequestHandler):
                     ("" if index == 0 else "\n") + value
                     for index, value in enumerate(marker_values)
                 ]
+            elif self.chat_mode == "r0b0bench-canary":
+                response_text = self._r0b0bench_canary_response(messages)
+                pieces = [response_text]
             elif self.chat_mode in {
                 "silent-left-truncation",
                 "silent-right-truncation",
@@ -328,6 +335,19 @@ class ModelsRequestHandler(BaseHTTPRequestHandler):
                 self._send_completion(model, response_text, usage)
         finally:
             self._release_chat_request()
+
+    @staticmethod
+    def _r0b0bench_canary_response(messages: list[dict[str, str]]) -> str:
+        prompt = "\n".join(message["content"] for message in messages)
+        if "R0B0BENCH_OK" in prompt:
+            return "R0B0BENCH_OK"
+        if "17乘以19" in prompt:
+            return "323"
+        if "keys alpha and beta" in prompt:
+            return '{"alpha":2,"beta":3}'
+        if "verification code" in prompt:
+            return "A9Q7"
+        return "R0B0BENCH_OK"
 
     def _admit_chat_request(self) -> tuple[int, int]:
         handler = type(self)
@@ -990,17 +1010,37 @@ class ModelsRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(frame)
         self.wfile.flush()
 
-    def _send_json(self, status: int, payload: dict[str, object]) -> None:
+    def _send_json(
+        self,
+        status: int,
+        payload: dict[str, object],
+        *,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        self._send_bytes(status, body, content_type="application/json")
+        self._send_bytes(
+            status,
+            body,
+            content_type="application/json",
+            extra_headers=extra_headers,
+        )
 
-    def _send_bytes(self, status: int, body: bytes, *, content_type: str) -> None:
+    def _send_bytes(
+        self,
+        status: int,
+        body: bytes,
+        *,
+        content_type: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         self.close_connection = True
         try:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Connection", "close")
+            for name, value in (extra_headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
             self.wfile.flush()
@@ -1146,6 +1186,8 @@ def _arguments() -> argparse.Namespace:
             "tool-malformed-arguments",
             "tool-refusal",
             "tool-timeout",
+            "r0b0bench-canary",
+            "r0b0bench-blocking",
         ),
         default=os.environ.get("MODELTOP_MOCK_MODE", "normal"),
     )

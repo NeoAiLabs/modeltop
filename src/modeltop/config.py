@@ -31,6 +31,7 @@ BUILTIN_CONFIG: Mapping[str, object] = {
             "request_timeout_seconds": 120.0,
             "delay_between_levels_seconds": 3.0,
             "maximum_concurrency": 128,
+            "unique_prompt_suffix_per_request": True,
         },
         "context": {
             "default_mode": "sweep",
@@ -75,6 +76,23 @@ BUILTIN_CONFIG: Mapping[str, object] = {
         "tool_calling": {
             "default_suite": "full",
             "request_timeout_seconds": 120.0,
+        },
+        "r0b0bench": {
+            "default_profile": "core-subset",
+            "default_tests": [
+                "canary",
+                "latency",
+                "concurrency",
+                "throughput",
+            ],
+            "request_timeout_seconds": 600.0,
+            "tokenizer_path": None,
+            "bfcl_python": None,
+            "bfcl_scripts_directory": None,
+            "qa_data_path": None,
+            "ifeval_data_path": None,
+            "humaneval_data_path": None,
+            "gsm8k_data_path": None,
         },
         "drafter": {
             "warmup_runs": 1,

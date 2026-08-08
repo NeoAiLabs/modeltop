@@ -11,6 +11,7 @@ from modeltop.benchmarks.models import (
     ConcurrencyBenchmarkStatus,
     ContextBenchmarkStatus,
     DrafterBenchmarkStatus,
+    R0b0benchBenchmarkStatus,
     SpeedTestStatus,
     ToolCallingBenchmarkStatus,
 )
@@ -161,6 +162,7 @@ class HeaderBar(Vertical):
         """Update existing metric cells from one coherent state snapshot."""
         subtitle = "LOCAL HARDWARE"
         tool_calling = state.tool_calling_benchmark
+        r0b0bench = state.r0b0bench_benchmark
         drafter = state.drafter_benchmark
         concurrency = state.concurrency_benchmark
         context = state.context_benchmark
@@ -168,6 +170,8 @@ class HeaderBar(Vertical):
         speed_label: str | None = None
         if tool_calling.is_active:
             speed_label = self._tool_calling_status(state)
+        elif r0b0bench.is_active:
+            speed_label = self._r0b0bench_status(state)
         elif drafter.is_active:
             speed_label = self._drafter_status(state)
         elif context.is_active:
@@ -180,6 +184,8 @@ class HeaderBar(Vertical):
             )
         elif state.active_view == "tool-calling":
             speed_label = self._tool_calling_status(state)
+        elif state.active_view == "r0b0bench":
+            speed_label = self._r0b0bench_status(state)
         elif state.active_view == "drafter":
             speed_label = self._drafter_status(state)
         elif state.active_view == "context":
@@ -339,6 +345,24 @@ class HeaderBar(Vertical):
             return (
                 "TOOL CALLING COMPLETE" if score is None else f"TOOL CALLING {score}%"
             )
+        return labels[lane.status]
+
+    @staticmethod
+    def _r0b0bench_status(state: ApplicationState) -> str:
+        lane = state.r0b0bench_benchmark
+        progress = lane.progress
+        if lane.status is R0b0benchBenchmarkStatus.RUNNING:
+            completed = progress.completed_count if progress is not None else 0
+            return f"R0B0BENCH {completed}/{len(lane.config.selected_lanes)}"
+        labels = {
+            R0b0benchBenchmarkStatus.IDLE: "R0B0BENCH READY",
+            R0b0benchBenchmarkStatus.VALIDATING: "R0B0BENCH VALIDATING",
+            R0b0benchBenchmarkStatus.CANCELLING: "R0B0BENCH CANCELLING",
+            R0b0benchBenchmarkStatus.COMPLETED: "R0B0BENCH COMPLETE",
+            R0b0benchBenchmarkStatus.COMPLETED_WITH_ERRORS: "R0B0BENCH ERRORS",
+            R0b0benchBenchmarkStatus.CANCELLED: "R0B0BENCH CANCELLED",
+            R0b0benchBenchmarkStatus.ERROR: "R0B0BENCH ERROR",
+        }
         return labels[lane.status]
 
     @staticmethod

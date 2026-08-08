@@ -2,13 +2,24 @@
 
 import math
 import re
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
+from pathlib import Path
 from typing import Literal, Self, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from modeltop.benchmarks.r0b0bench_contract import (
+    R0B0BENCH_QUALITY_ORDER,
+    R0B0BENCH_SYSTEMS_ORDER,
+    R0b0benchLaneId,
+    R0b0benchProfile,
+    r0b0bench_ordered_selection,
+    r0b0bench_profile_lanes,
+    validate_r0b0bench_selection,
+)
 from modeltop.chat.models import GenerationMetrics, ThinkingMode
 from modeltop.hardware.models import HardwareSnapshot
 from modeltop.models import (
@@ -17,6 +28,7 @@ from modeltop.models import (
     ConcurrencyBenchmarkDefaultsConfig,
     ContextBenchmarkDefaultsConfig,
     DrafterBenchmarkDefaultsConfig,
+    R0b0benchBenchmarkDefaultsConfig,
     ToolCallingBenchmarkDefaultsConfig,
 )
 
@@ -396,6 +408,9 @@ class ConcurrencyBenchmarkConfig(BaseModel):
     maximum_concurrency: int = Field(
         default=_CONCURRENCY_DEFAULTS.maximum_concurrency, ge=1
     )
+    unique_prompt_suffix_per_request: bool = (
+        _CONCURRENCY_DEFAULTS.unique_prompt_suffix_per_request
+    )
     thinking_mode: ThinkingMode = "server_default"
 
     @field_validator("concurrency_levels", mode="before")
@@ -519,6 +534,7 @@ def concurrency_benchmark_config_from_defaults(
         delay_between_levels_seconds=defaults.delay_between_levels_seconds,
         stream=True,
         maximum_concurrency=defaults.maximum_concurrency,
+        unique_prompt_suffix_per_request=defaults.unique_prompt_suffix_per_request,
     )
 
 
@@ -1641,6 +1657,440 @@ def initial_context_benchmark_state(
     return ContextBenchmarkState(
         config=default_config,
         status=ContextBenchmarkStatus.IDLE,
+        active_benchmark_id=None,
+        progress=None,
+        benchmark_started_at=None,
+        latest_result=None,
+        benchmark_error=None,
+    )
+
+
+class R0b0benchBenchmarkConfig(BaseModel):
+    """Validated immutable input for one r0b0bench run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    profile: R0b0benchProfile = "core-subset"
+    selected_lanes: tuple[R0b0benchLaneId, ...] = (
+        "canary",
+        "latency",
+        "concurrency",
+        "throughput",
+    )
+    request_timeout_seconds: float = 600.0
+    tokenizer_path: str | None = Field(default=None, repr=False)
+    bfcl_python: str | None = Field(default=None, repr=False)
+    bfcl_scripts_directory: str | None = Field(default=None, repr=False)
+    qa_data_path: str | None = Field(default=None, repr=False)
+    ifeval_data_path: str | None = Field(default=None, repr=False)
+    humaneval_data_path: str | None = Field(default=None, repr=False)
+    gsm8k_data_path: str | None = Field(default=None, repr=False)
+    allow_unsafe_humaneval: bool = False
+
+    @field_validator("request_timeout_seconds", mode="before")
+    @classmethod
+    def validate_timeout_input(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("must be a number")
+        return value
+
+    @field_validator("request_timeout_seconds")
+    @classmethod
+    def validate_timeout(cls, value: float) -> float:
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("must be finite and greater than zero")
+        return value
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> Self:
+        validate_r0b0bench_selection(self.profile, self.selected_lanes)
+        return self
+
+
+def r0b0bench_benchmark_config_from_defaults(
+    defaults: R0b0benchBenchmarkDefaultsConfig,
+) -> R0b0benchBenchmarkConfig:
+    """Build a runtime r0b0bench config from effective YAML defaults."""
+    return R0b0benchBenchmarkConfig(
+        profile=defaults.default_profile,
+        selected_lanes=defaults.default_tests,
+        request_timeout_seconds=defaults.request_timeout_seconds,
+        tokenizer_path=defaults.tokenizer_path,
+        bfcl_python=defaults.bfcl_python,
+        bfcl_scripts_directory=defaults.bfcl_scripts_directory,
+        qa_data_path=defaults.qa_data_path,
+        ifeval_data_path=defaults.ifeval_data_path,
+        humaneval_data_path=defaults.humaneval_data_path,
+        gsm8k_data_path=defaults.gsm8k_data_path,
+    )
+
+
+def r0b0bench_system_lanes(
+    profile: R0b0benchProfile,
+) -> tuple[R0b0benchLaneId, ...]:
+    """Return profile-compatible systems lanes in upstream order."""
+    allowed = set(r0b0bench_profile_lanes(profile))
+    return tuple(lane for lane in R0B0BENCH_SYSTEMS_ORDER if lane in allowed)
+
+
+def r0b0bench_quality_lanes(
+    profile: R0b0benchProfile,
+) -> tuple[R0b0benchLaneId, ...]:
+    """Return profile-compatible quality lanes in upstream order."""
+    allowed = set(r0b0bench_profile_lanes(profile))
+    return tuple(lane for lane in R0B0BENCH_QUALITY_ORDER if lane in allowed)
+
+
+class R0b0benchBenchmarkStatus(StrEnum):
+    """Lifecycle status for the latest r0b0bench run."""
+
+    IDLE = "idle"
+    VALIDATING = "validating"
+    RUNNING = "running"
+    CANCELLING = "cancelling"
+    COMPLETED = "completed"
+    COMPLETED_WITH_ERRORS = "completed_with_errors"
+    CANCELLED = "cancelled"
+    ERROR = "error"
+
+    @property
+    def is_active(self) -> bool:
+        return self in {self.VALIDATING, self.RUNNING, self.CANCELLING}
+
+    @property
+    def is_terminal(self) -> bool:
+        return self in {
+            self.COMPLETED,
+            self.COMPLETED_WITH_ERRORS,
+            self.CANCELLED,
+            self.ERROR,
+        }
+
+
+class R0b0benchLaneStatus(StrEnum):
+    """Exact upstream lane outcome."""
+
+    PASS = "PASS"
+    FAIL = "FAIL"
+    SKIP = "SKIP"
+    ERROR = "ERROR"
+    NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
+
+
+type R0b0benchErrorCode = Literal[
+    "dependency_unavailable",
+    "prerequisite_unavailable",
+    "unsupported_authenticated_endpoint",
+    "upstream_failure",
+    "invalid_upstream_result",
+]
+type R0b0benchWarningCode = Literal[
+    "filtered_selection",
+    "perf_composite",
+    "canary_infrastructure_stop",
+    "cancelled_partial",
+]
+type R0b0benchMetricUnit = Literal["count", "ratio", "ms", "tokens/s", "tokens"]
+
+_R0B0BENCH_WARNING_ORDER: tuple[R0b0benchWarningCode, ...] = (
+    "filtered_selection",
+    "perf_composite",
+    "canary_infrastructure_stop",
+    "cancelled_partial",
+)
+_LATENCY_METRICS: dict[str, R0b0benchMetricUnit] = {
+    "ttft_mean": "ms",
+    "itl_mean": "ms",
+    "itl_p95_mean": "ms",
+    "e2e_mean": "ms",
+    "failed_requests": "count",
+}
+_CONCURRENCY_METRICS: dict[str, R0b0benchMetricUnit] = {
+    "peak_level": "count",
+    "peak_aggregate_output_rate": "tokens/s",
+    "completed_requests": "count",
+    "failed_requests": "count",
+}
+_THROUGHPUT_METRICS: dict[str, R0b0benchMetricUnit] = {
+    "decode_median_output_rate": "tokens/s",
+    "prefill_median_prompt_rate": "tokens/s",
+    "failed_requests": "count",
+}
+R0B0BENCH_METRIC_REGISTRY: Mapping[
+    R0b0benchLaneId, Mapping[str, R0b0benchMetricUnit | None]
+] = {
+    "canary": {"passed": None, "cases": "count"},
+    "bfcl_mt": {"accuracy": "ratio", "expected_rows": "count"},
+    "bfcl_ast": {
+        "micro_accuracy": "ratio",
+        "micro_correct": "count",
+        "micro_total": "count",
+    },
+    "latency": _LATENCY_METRICS,
+    "concurrency": _CONCURRENCY_METRICS,
+    "throughput": _THROUGHPUT_METRICS,
+    "niah": {
+        "max_model_len": "tokens",
+        "depth_25": "tokens",
+        "depth_50": "tokens",
+        "depth_90": "tokens",
+        "passed_depths": "count",
+        "measured_depths": "count",
+    },
+    "qa": {"accuracy": "ratio", "correct": "count", "cases": "count"},
+    "ifeval": {"accuracy": "ratio", "correct": "count", "cases": "count"},
+    "humaneval": {"pass_at_1": "ratio", "cases": "count"},
+    "gsm8k": {"accuracy": "ratio", "correct": "count", "cases": "count"},
+    "perf": {
+        **{f"latency.{name}": unit for name, unit in _LATENCY_METRICS.items()},
+        **{f"concurrency.{name}": unit for name, unit in _CONCURRENCY_METRICS.items()},
+        **{f"throughput.{name}": unit for name, unit in _THROUGHPUT_METRICS.items()},
+    },
+}
+
+
+@dataclass(frozen=True, slots=True)
+class R0b0benchMetric:
+    """One allowlisted scalar copied from an upstream lane summary."""
+
+    name: str
+    value: int | float | bool
+    unit: R0b0benchMetricUnit | None
+
+    def __post_init__(self) -> None:
+        if not self.name or len(self.name) > 64:
+            raise ValueError("metric name must contain 1..64 characters")
+        if type(self.value) not in {int, float, bool}:
+            raise ValueError("metric value must be a strict scalar")
+        if isinstance(self.value, float) and not math.isfinite(self.value):
+            raise ValueError("metric value must be finite")
+        if not isinstance(self.value, bool) and self.value < 0:
+            raise ValueError("metric value must be non-negative")
+        if self.unit in {"count", "tokens"} and type(self.value) is not int:
+            raise ValueError("count and token metrics must be strict integers")
+        if self.unit == "ratio" and (
+            isinstance(self.value, bool) or not 0 <= self.value <= 1
+        ):
+            raise ValueError("ratio metrics must be within 0..1")
+        if self.unit in {"ms", "tokens/s", "ratio"} and isinstance(self.value, bool):
+            raise ValueError("numeric metrics must not be booleans")
+        if self.unit is None and type(self.value) is not bool:
+            raise ValueError("unitless r0b0bench metrics must be booleans")
+
+
+@dataclass(frozen=True, slots=True)
+class R0b0benchLaneResult:
+    """One normalized lane result without upstream payloads."""
+
+    lane_id: R0b0benchLaneId
+    status: R0b0benchLaneStatus
+    infra_errors: int
+    elapsed_seconds: float | None
+    metrics: tuple[R0b0benchMetric, ...]
+
+    def __post_init__(self) -> None:
+        if isinstance(self.infra_errors, bool) or self.infra_errors < 0:
+            raise ValueError("infra_errors must be a non-negative integer")
+        if self.elapsed_seconds is not None and (
+            not math.isfinite(self.elapsed_seconds) or self.elapsed_seconds < 0
+        ):
+            raise ValueError("elapsed_seconds must be finite and non-negative")
+        names = tuple(metric.name for metric in self.metrics)
+        if len(names) != len(set(names)):
+            raise ValueError("metric names must be unique")
+        registry = R0B0BENCH_METRIC_REGISTRY[self.lane_id]
+        for metric in self.metrics:
+            if registry.get(metric.name, object()) != metric.unit:
+                raise ValueError("metric name or unit is invalid for the lane")
+
+
+@dataclass(frozen=True, slots=True)
+class R0b0benchBenchmarkProgress:
+    """Bounded progress for an active r0b0bench child."""
+
+    configured_count: int
+    completed_count: int
+    pass_count: int
+    fail_count: int
+    skip_count: int
+    error_count: int
+    not_implemented_count: int
+    current_lane: R0b0benchLaneId | None
+    elapsed_seconds: float
+    cached_hardware: HardwareSnapshot | None
+
+    def __post_init__(self) -> None:
+        counts = (
+            self.configured_count,
+            self.completed_count,
+            self.pass_count,
+            self.fail_count,
+            self.skip_count,
+            self.error_count,
+            self.not_implemented_count,
+        )
+        if any(isinstance(count, bool) or count < 0 for count in counts):
+            raise ValueError("progress counts must be non-negative integers")
+        if self.configured_count > len(R0B0BENCH_METRIC_REGISTRY):
+            raise ValueError("configured_count exceeds lane registry")
+        if self.completed_count > self.configured_count:
+            raise ValueError("completed_count exceeds configured_count")
+        if sum(counts[2:]) != self.completed_count:
+            raise ValueError("outcome counts must match completed_count")
+        if not math.isfinite(self.elapsed_seconds) or self.elapsed_seconds < 0:
+            raise ValueError("elapsed_seconds must be finite and non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class R0b0benchBenchmarkResult:
+    """Terminal normalized r0b0bench result retained by ModelTop."""
+
+    benchmark_id: str
+    upstream_run_id: str | None
+    upstream_version: str | None
+    upstream_schema_version: int | None
+    upstream_commit: str
+    config: R0b0benchBenchmarkConfig
+    server_id: str
+    server_name: str
+    server_endpoint: str = field(repr=False)
+    model_id: str
+    backend: str
+    started_at: datetime
+    completed_at: datetime
+    status: R0b0benchBenchmarkStatus
+    cancelled: bool
+    error_code: R0b0benchErrorCode | None
+    error_message: str | None
+    selected_count: int
+    completed_count: int
+    unstarted_lanes: tuple[R0b0benchLaneId, ...]
+    lanes: tuple[R0b0benchLaneResult, ...]
+    infra_errors_total: int
+    invalid_for_publish: bool
+    warning_codes: tuple[R0b0benchWarningCode, ...]
+    hardware_summary: HardwareBenchmarkSummary | None
+    run_directory: Path | None = field(repr=False)
+
+    def __post_init__(self) -> None:
+        for name, value, maximum in (
+            ("benchmark_id", self.benchmark_id, 128),
+            ("upstream_commit", self.upstream_commit, 40),
+            ("server_id", self.server_id, 128),
+            ("server_name", self.server_name, 256),
+            ("model_id", self.model_id, 512),
+            ("backend", self.backend, 128),
+        ):
+            _validate_bounded_text(name, value, maximum)
+        if not self.status.is_terminal:
+            raise ValueError("r0b0bench results require a terminal status")
+        if self.cancelled != (self.status is R0b0benchBenchmarkStatus.CANCELLED):
+            raise ValueError("cancelled must match terminal status")
+        has_error = self.error_code is not None or self.error_message is not None
+        if (self.error_code is None) != (self.error_message is None):
+            raise ValueError("error code and message must appear together")
+        if (self.status is R0b0benchBenchmarkStatus.ERROR) != has_error:
+            raise ValueError("only error results may retain a bounded error")
+        if self.error_message is not None and len(self.error_message) > 256:
+            raise ValueError("error_message exceeds 256 characters")
+        for name, value in (
+            ("started_at", self.started_at),
+            ("completed_at", self.completed_at),
+        ):
+            if value.utcoffset() != timedelta(0):
+                raise ValueError(f"{name} must be timezone-aware UTC")
+        if self.completed_at < self.started_at:
+            raise ValueError("completed_at must not precede started_at")
+        ordered = r0b0bench_ordered_selection(
+            self.config.profile, self.config.selected_lanes
+        )
+        if self.selected_count != len(ordered):
+            raise ValueError("selected_count must match selected lanes")
+        if self.completed_count != len(self.lanes):
+            raise ValueError("completed_count must match lane rows")
+        if self.completed_count + len(self.unstarted_lanes) != self.selected_count:
+            raise ValueError("completed and unstarted counts must match selection")
+        lane_ids = tuple(lane.lane_id for lane in self.lanes)
+        if lane_ids != ordered[: self.completed_count]:
+            raise ValueError("lane results must follow canonical upstream order")
+        if self.unstarted_lanes != ordered[self.completed_count :]:
+            raise ValueError("unstarted lanes must be the canonical remainder")
+        if self.infra_errors_total != sum(lane.infra_errors for lane in self.lanes):
+            raise ValueError("infra_errors_total must equal lane aggregates")
+        if self.infra_errors_total < 0:
+            raise ValueError("infra_errors_total must be non-negative")
+        problem_rows = any(
+            lane.infra_errors
+            or lane.status
+            in {R0b0benchLaneStatus.ERROR, R0b0benchLaneStatus.NOT_IMPLEMENTED}
+            for lane in self.lanes
+        )
+        if self.status is R0b0benchBenchmarkStatus.COMPLETED and (
+            problem_rows or self.unstarted_lanes
+        ):
+            raise ValueError("completed results cannot contain infrastructure errors")
+        if self.status is R0b0benchBenchmarkStatus.COMPLETED_WITH_ERRORS and (
+            not problem_rows
+        ):
+            raise ValueError("completed-with-errors requires an infrastructure outcome")
+        canonical = r0b0bench_profile_lanes(self.config.profile)
+        selected = set(self.config.selected_lanes)
+        canonical_non_pass = any(
+            lane.lane_id != "perf" and lane.status is not R0b0benchLaneStatus.PASS
+            for lane in self.lanes
+        )
+        expected_invalid = (
+            ordered != canonical
+            or "perf" in selected
+            or canonical_non_pass
+            or bool(self.infra_errors_total)
+            or bool(self.unstarted_lanes)
+            or self.status
+            in {R0b0benchBenchmarkStatus.CANCELLED, R0b0benchBenchmarkStatus.ERROR}
+        )
+        if self.invalid_for_publish != expected_invalid:
+            raise ValueError("invalid_for_publish does not match result validity")
+        warning_indexes = tuple(
+            _R0B0BENCH_WARNING_ORDER.index(code) for code in self.warning_codes
+        )
+        if len(set(self.warning_codes)) != len(self.warning_codes):
+            raise ValueError("warning codes must be unique")
+        if warning_indexes != tuple(sorted(warning_indexes)):
+            raise ValueError("warning codes must use fixed ordering")
+
+    @property
+    def wall_time_seconds(self) -> float:
+        return (self.completed_at - self.started_at).total_seconds()
+
+
+@dataclass(frozen=True, slots=True)
+class R0b0benchBenchmarkState:
+    """Independent r0b0bench lane in application state."""
+
+    config: R0b0benchBenchmarkConfig
+    status: R0b0benchBenchmarkStatus
+    active_benchmark_id: str | None
+    progress: R0b0benchBenchmarkProgress | None
+    benchmark_started_at: datetime | None
+    latest_result: R0b0benchBenchmarkResult | None
+    benchmark_error: str | None
+
+    @property
+    def is_active(self) -> bool:
+        return self.status.is_active
+
+    @property
+    def is_terminal(self) -> bool:
+        return self.status.is_terminal
+
+
+def initial_r0b0bench_benchmark_state(
+    default_config: R0b0benchBenchmarkConfig,
+) -> R0b0benchBenchmarkState:
+    """Build the ready, independent r0b0bench lane."""
+    return R0b0benchBenchmarkState(
+        config=default_config,
+        status=R0b0benchBenchmarkStatus.IDLE,
         active_benchmark_id=None,
         progress=None,
         benchmark_started_at=None,

@@ -120,6 +120,10 @@ class ToolCallingBenchmarkService:
                 raise ToolCallingBenchmarkOperationError(
                     "A Tool Calling benchmark is already running."
                 )
+            if state.r0b0bench_benchmark.is_active:
+                raise ToolCallingBenchmarkOperationError(
+                    "An r0b0bench benchmark is already running."
+                )
             if state.context_benchmark.is_active:
                 raise ToolCallingBenchmarkOperationError(
                     "A Context benchmark is already running."

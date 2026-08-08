@@ -28,6 +28,34 @@ def test_normalize_base_url() -> None:
     assert normalize_base_url("http://server/root") == "http://server/root/v1"
 
 
+def test_http_limits_match_concurrency_safety_ceiling() -> None:
+    """Shared client pool admits the Concurrency safety maximum end-to-end."""
+    from modeltop.api.client import http_limits_for_maximum_concurrency
+
+    defaulted = http_limits_for_maximum_concurrency()
+    assert defaulted.max_connections == 132
+    assert defaulted.max_keepalive_connections == 128
+
+    raised = http_limits_for_maximum_concurrency(256)
+    assert raised.max_connections == 260
+    assert raised.max_keepalive_connections == 256
+
+    client = OpenAICompatibleClient(
+        "http://server",
+        None,
+        3,
+        limits=http_limits_for_maximum_concurrency(64),
+    )
+    try:
+        assert client.limits.max_connections == 100  # floor remains httpx default
+        assert client.limits.max_keepalive_connections == 64
+    finally:
+        asyncio.run(client.aclose())
+
+    with pytest.raises(ValueError, match="positive"):
+        http_limits_for_maximum_concurrency(0)
+
+
 def test_models_request_headers_latency_and_unknown_fields() -> None:
     """The client sends one exact request and preserves unknown response fields."""
 

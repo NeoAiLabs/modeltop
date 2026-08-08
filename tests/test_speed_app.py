@@ -10,6 +10,7 @@ from textual.containers import VerticalScroll
 from textual.widgets import Button, ContentSwitcher, Input, OptionList, Static
 
 import modeltop.app as app_module
+import modeltop.services.result_archive as result_archive_module
 from modeltop.benchmarks.models import (
     SpeedTestConfig,
     SpeedTestResult,
@@ -32,6 +33,12 @@ def test_speed_workflow_results_reopen_and_settings_navigation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        result_archive_module,
+        "_DEFAULT_HISTORY_DIRECTORY",
+        tmp_path / "history",
+    )
+
     async def scenario() -> None:
         transport = _ChatTransport()
         app = _app(transport)
@@ -119,7 +126,7 @@ def test_speed_workflow_results_reopen_and_settings_navigation(
             await pilot.pause()
 
             menu.focus()
-            menu.highlighted = 7
+            menu.highlighted = 8
             await pilot.press("enter")
             await pilot.pause()
             assert switcher.current == "results-workspace"
@@ -139,7 +146,7 @@ def test_speed_workflow_results_reopen_and_settings_navigation(
             assert switcher.current == "speed-test-workspace"
 
             menu.focus()
-            menu.highlighted = 8
+            menu.highlighted = 9
             await pilot.press("enter")
             await pilot.pause()
             assert switcher.current == "settings-workspace"

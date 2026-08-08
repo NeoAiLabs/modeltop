@@ -80,12 +80,23 @@ class BenchmarkConfigurationPanel(VerticalScroll):
         with Horizontal(classes="config-row"):
             yield Label("Disable thinking (Qwen/vLLM)")
             yield Switch(id="concurrency-disable-thinking")
+        with Horizontal(classes="config-row"):
+            yield Label("Unique prompt suffix per request")
+            yield Switch(id="concurrency-unique-suffix")
         yield Label("Optional system prompt", classes="section-title")
         yield TextArea(
             id="concurrency-system-prompt", soft_wrap=True, show_line_numbers=False
         )
         yield Label("Fixed user prompt", classes="section-title")
         yield TextArea(id="concurrency-prompt", soft_wrap=True, show_line_numbers=False)
+        yield Static(
+            "Concurrency is max simultaneous in-flight requests, not total work. "
+            "Hardware samples are LOCAL to this machine. Aggregate tok/s uses level "
+            "wall time (not the sum of per-request speeds). Identical prompts without "
+            "unique suffixes can overstate scaling via KV/prefix cache.",
+            id="concurrency-caveats",
+            markup=False,
+        )
         yield Static("", id="concurrency-run-plan", markup=False)
         yield Button(
             "Run Concurrency Benchmark", id="concurrency-run", variant="primary"
@@ -124,6 +135,9 @@ class BenchmarkConfigurationPanel(VerticalScroll):
         self.query_one("#concurrency-disable-thinking", Switch).value = (
             config.thinking_mode == "disabled"
         )
+        self.query_one(
+            "#concurrency-unique-suffix", Switch
+        ).value = config.unique_prompt_suffix_per_request
         self.query_one("#concurrency-mode", OptionList).highlighted = (
             0 if config.mode == "fixed" else 1
         )
@@ -249,6 +263,9 @@ class BenchmarkConfigurationPanel(VerticalScroll):
                 ),
                 "stream": True,
                 "maximum_concurrency": self._maximum_concurrency,
+                "unique_prompt_suffix_per_request": self.query_one(
+                    "#concurrency-unique-suffix", Switch
+                ).value,
                 "thinking_mode": (
                     "disabled"
                     if self.query_one("#concurrency-disable-thinking", Switch).value
@@ -291,10 +308,17 @@ class BenchmarkConfigurationPanel(VerticalScroll):
             warnings.append("high concurrency")
         if config.requests_per_level >= 500:
             warnings.append("high request count")
+        if not config.unique_prompt_suffix_per_request:
+            warnings.append("identical prompts may cache")
         warning = f" · Warning: {', '.join(warnings)}" if warnings else ""
+        suffix = (
+            "unique suffixes on"
+            if config.unique_prompt_suffix_per_request
+            else "unique suffixes off"
+        )
         plan.update(
             f"Run plan: maximum {max(levels)} simultaneous requests · "
             f"{measured} measured + {warmups} warm-up = {total} total · "
             f"{config.max_tokens} max tokens · safety maximum "
-            f"{config.maximum_concurrency}{warning}"
+            f"{config.maximum_concurrency} · {suffix}{warning}"
         )

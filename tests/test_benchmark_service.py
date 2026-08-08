@@ -172,9 +172,12 @@ def test_fixed_benchmark_enforces_bound_and_preserves_request_contract() -> None
             messages
             == (
                 ChatMessage("system", "system"),
-                ChatMessage("user", "fixed prompt"),
+                ChatMessage(
+                    "user",
+                    f"fixed prompt\n\n[concurrency-request 3/{sequence}]",
+                ),
             )
-            for messages in client.messages
+            for sequence, messages in enumerate(client.messages, start=1)
         )
         assert all(
             settings.max_tokens == 64 and settings.stream
@@ -182,6 +185,27 @@ def test_fixed_benchmark_enforces_bound_and_preserves_request_contract() -> None
         )
         assert store.state.concurrency_benchmark.latest_result == result
         assert store.state.active_generation_id is None
+
+    asyncio.run(scenario())
+
+
+def test_unique_prompt_suffix_can_be_disabled_for_cache_hit_runs() -> None:
+    async def scenario() -> None:
+        client = _ConcurrentClient()
+        service, _ = _service(client)
+        config = ConcurrencyBenchmarkConfig(
+            mode="fixed",
+            concurrency_levels=(2,),
+            requests_per_level=3,
+            warmup_requests=0,
+            prompt="cached prompt",
+            unique_prompt_suffix_per_request=False,
+            request_timeout_seconds=1.0,
+            delay_between_levels_seconds=0.0,
+        )
+        result = await service.run_benchmark(service.begin_benchmark(config))
+        assert result.status is ConcurrencyBenchmarkStatus.COMPLETED
+        assert client.messages == [(ChatMessage("user", "cached prompt"),)] * 3
 
     asyncio.run(scenario())
 

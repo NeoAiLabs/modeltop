@@ -75,6 +75,10 @@ class DashboardChatService:
                 raise ChatOperationError(
                     "Chat is unavailable while Tool Calling is running"
                 )
+            if state.r0b0bench_benchmark.is_active:
+                raise ChatOperationError(
+                    "Chat is unavailable while r0b0bench is running"
+                )
             if state.context_benchmark.is_active:
                 raise ChatOperationError(
                     "Chat is unavailable while a Context benchmark is running"

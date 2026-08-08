@@ -171,6 +171,10 @@ class DrafterBenchmarkService:
                 raise DrafterBenchmarkOperationError(
                     "A Tool Calling benchmark is already running."
                 )
+            if state.r0b0bench_benchmark.is_active:
+                raise DrafterBenchmarkOperationError(
+                    "An r0b0bench benchmark is already running."
+                )
             if state.context_benchmark.is_active:
                 raise DrafterBenchmarkOperationError(
                     "A Context benchmark is already running."

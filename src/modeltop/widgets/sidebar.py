@@ -57,6 +57,7 @@ class BenchmarkSidebar(Vertical):
             Option("Concurrency", id="concurrency"),
             Option("Context Length", id="context"),
             Option("Tool Calling", id="tool-calling"),
+            Option("r0b0bench", id="r0b0bench"),
             Option("Drafter", id="drafter"),
             Option("Results", id="results"),
             Option("Settings", id="settings"),

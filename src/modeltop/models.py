@@ -7,6 +7,11 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from modeltop.benchmarks.r0b0bench_contract import (
+    R0b0benchLaneId,
+    R0b0benchProfile,
+    validate_r0b0bench_selection,
+)
 from modeltop.theme import DEFAULT_CATPPUCCIN_THEME, CatppuccinTheme
 
 
@@ -73,6 +78,7 @@ class ConcurrencyBenchmarkDefaultsConfig(BaseModel):
     request_timeout_seconds: float = Field(default=120.0, gt=0.0)
     delay_between_levels_seconds: float = Field(default=3.0, ge=0.0)
     maximum_concurrency: int = Field(default=128, ge=1)
+    unique_prompt_suffix_per_request: bool = True
 
     @field_validator("default_levels", mode="before")
     @classmethod
@@ -396,6 +402,45 @@ class ContextBenchmarkDefaultsConfig(BaseModel):
         return self
 
 
+class R0b0benchBenchmarkDefaultsConfig(BaseModel):
+    """Validated YAML defaults for the r0b0bench workspace."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    default_profile: R0b0benchProfile = "core-subset"
+    default_tests: tuple[R0b0benchLaneId, ...] = (
+        "canary",
+        "latency",
+        "concurrency",
+        "throughput",
+    )
+    request_timeout_seconds: float = 600.0
+    tokenizer_path: str | None = Field(default=None, repr=False)
+    bfcl_python: str | None = Field(default=None, repr=False)
+    bfcl_scripts_directory: str | None = Field(default=None, repr=False)
+    qa_data_path: str | None = Field(default=None, repr=False)
+    ifeval_data_path: str | None = Field(default=None, repr=False)
+    humaneval_data_path: str | None = Field(default=None, repr=False)
+    gsm8k_data_path: str | None = Field(default=None, repr=False)
+
+    @field_validator("request_timeout_seconds", mode="before")
+    @classmethod
+    def validate_timeout_input(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("must be a number")
+        return value
+
+    @field_validator("request_timeout_seconds")
+    @classmethod
+    def validate_timeout(cls, value: float) -> float:
+        return _validate_positive_finite_interval(value)
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> Self:
+        validate_r0b0bench_selection(self.default_profile, self.default_tests)
+        return self
+
+
 class ToolCallingBenchmarkDefaultsConfig(BaseModel):
     """Validated YAML defaults for the Tool Calling benchmark."""
 
@@ -492,6 +537,9 @@ class BenchmarksConfig(BaseModel):
     )
     drafter: DrafterBenchmarkDefaultsConfig = Field(
         default_factory=DrafterBenchmarkDefaultsConfig
+    )
+    r0b0bench: R0b0benchBenchmarkDefaultsConfig = Field(
+        default_factory=R0b0benchBenchmarkDefaultsConfig
     )
 
 

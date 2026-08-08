@@ -18,6 +18,7 @@ benchmarks:
     request_timeout_seconds: 120.0
     delay_between_levels_seconds: 3.0
     maximum_concurrency: 128
+    unique_prompt_suffix_per_request: true
   context:
     default_mode: sweep
     default_lengths: [1024, 4096, 8192, 16384, 32768]
@@ -58,6 +59,17 @@ benchmarks:
   tool_calling:
     default_suite: full
     request_timeout_seconds: 120.0
+  r0b0bench:
+    default_profile: core-subset
+    default_tests: [canary, latency, concurrency, throughput]
+    request_timeout_seconds: 600.0
+    tokenizer_path: null
+    bfcl_python: null
+    bfcl_scripts_directory: null
+    qa_data_path: null
+    ifeval_data_path: null
+    humaneval_data_path: null
+    gsm8k_data_path: null
   drafter:
     warmup_runs: 1
     measured_runs: 5

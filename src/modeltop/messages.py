@@ -6,6 +6,7 @@ from modeltop.benchmarks.models import (
     ConcurrencyBenchmarkConfig,
     ContextBenchmarkConfig,
     DrafterBenchmarkConfig,
+    R0b0benchBenchmarkConfig,
     SpeedTestConfig,
     ToolCallingBenchmarkConfig,
 )
@@ -87,6 +88,22 @@ class ToolCallingBenchmarkEditRequested(Message):
     """Restore the latest Tool Calling configuration for editing."""
 
 
+class R0b0benchBenchmarkStartRequested(Message):
+    """Start one validated r0b0bench configuration."""
+
+    def __init__(self, config: R0b0benchBenchmarkConfig) -> None:
+        super().__init__()
+        self.config = config
+
+
+class R0b0benchBenchmarkRunAgainRequested(Message):
+    """Rerun the latest immutable r0b0bench configuration."""
+
+
+class R0b0benchBenchmarkEditRequested(Message):
+    """Restore the latest r0b0bench configuration for editing."""
+
+
 class DrafterBenchmarkStartRequested(Message):
     """Start one validated Drafter benchmark configuration."""
 
@@ -145,3 +162,19 @@ class SpeedTestResultSelected(Message):
     def __init__(self, run_id: str) -> None:
         super().__init__()
         self.run_id = run_id
+
+
+class ArchivedResultsSelectionChanged(Message):
+    """Replace the durable archive comparison selection."""
+
+    def __init__(self, result_ids: tuple[str, ...]) -> None:
+        super().__init__()
+        self.result_ids = result_ids
+
+
+class ArchivedResultsComparisonRequested(Message):
+    """Open a comparison for two durable archive result IDs."""
+
+    def __init__(self, result_ids: tuple[str, str]) -> None:
+        super().__init__()
+        self.result_ids = result_ids

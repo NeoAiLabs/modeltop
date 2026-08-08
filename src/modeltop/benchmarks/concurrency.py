@@ -443,7 +443,15 @@ class ConcurrencyBenchmark(Benchmark[ConcurrencyBenchmarkResult]):
         messages: list[ChatMessage] = []
         if self._config.system_prompt is not None:
             messages.append(ChatMessage("system", self._config.system_prompt))
-        messages.append(ChatMessage("user", self._config.prompt))
+        user_prompt = self._config.prompt
+        if self._config.unique_prompt_suffix_per_request:
+            # Break identical-prefix KV cache so concurrent load resembles
+            # multi-tenant traffic rather than one cached prompt replayed N times.
+            user_prompt = (
+                f"{self._config.prompt.rstrip()}\n\n"
+                f"[concurrency-request {level}/{sequence}]"
+            )
+        messages.append(ChatMessage("user", user_prompt))
         request = GenerationRequest(
             server_id=self._server_id,
             model_id=self._model_id,

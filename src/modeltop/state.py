@@ -13,12 +13,15 @@ from modeltop.benchmarks.models import (
     ContextBenchmarkState,
     DrafterBenchmarkConfig,
     DrafterBenchmarkState,
+    R0b0benchBenchmarkConfig,
+    R0b0benchBenchmarkState,
     SpeedTestState,
     ToolCallingBenchmarkConfig,
     ToolCallingBenchmarkState,
     initial_concurrency_benchmark_state,
     initial_context_benchmark_state,
     initial_drafter_benchmark_state,
+    initial_r0b0bench_benchmark_state,
     initial_speed_test_state,
     initial_tool_calling_benchmark_state,
 )
@@ -26,6 +29,7 @@ from modeltop.chat.models import GenerationMetrics, GenerationStatus
 from modeltop.chat.session import ChatSession
 from modeltop.hardware.models import HardwareSnapshot
 from modeltop.models import DiscoveredModel
+from modeltop.services.result_archive import ResultArchiveSnapshot, load_archive
 
 type ActiveView = Literal[
     "overview",
@@ -34,6 +38,7 @@ type ActiveView = Literal[
     "concurrency",
     "context",
     "tool-calling",
+    "r0b0bench",
     "drafter",
     "results",
     "settings",
@@ -89,7 +94,9 @@ class ApplicationState:
     concurrency_benchmark: ConcurrencyBenchmarkState
     context_benchmark: ContextBenchmarkState
     tool_calling_benchmark: ToolCallingBenchmarkState
+    r0b0bench_benchmark: R0b0benchBenchmarkState
     drafter_benchmark: DrafterBenchmarkState
+    result_archive: ResultArchiveSnapshot
 
     @property
     def benchmark_is_active(self) -> bool:
@@ -99,6 +106,7 @@ class ApplicationState:
             or self.concurrency_benchmark.is_active
             or self.context_benchmark.is_active
             or self.tool_calling_benchmark.is_active
+            or self.r0b0bench_benchmark.is_active
             or self.drafter_benchmark.is_active
         )
 
@@ -108,8 +116,10 @@ def initial_application_state(
     *,
     hardware_enabled: bool,
     concurrency_config: ConcurrencyBenchmarkConfig | None = None,
+    result_archive: ResultArchiveSnapshot | None = None,
     context_config: ContextBenchmarkConfig | None = None,
     tool_calling_config: ToolCallingBenchmarkConfig | None = None,
+    r0b0bench_config: R0b0benchBenchmarkConfig | None = None,
     drafter_config: DrafterBenchmarkConfig | None = None,
 ) -> ApplicationState:
     """Build the initial state for independent server and hardware lanes."""
@@ -156,9 +166,15 @@ def initial_application_state(
             if tool_calling_config is not None
             else ToolCallingBenchmarkConfig()
         ),
+        r0b0bench_benchmark=initial_r0b0bench_benchmark_state(
+            r0b0bench_config
+            if r0b0bench_config is not None
+            else R0b0benchBenchmarkConfig()
+        ),
         drafter_benchmark=initial_drafter_benchmark_state(
             drafter_config if drafter_config is not None else DrafterBenchmarkConfig()
         ),
+        result_archive=result_archive if result_archive is not None else load_archive(),
     )
 
 

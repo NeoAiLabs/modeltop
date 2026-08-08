@@ -109,6 +109,10 @@ class BenchmarkService:
                 raise BenchmarkOperationError(
                     "A Tool Calling benchmark is already running."
                 )
+            if state.r0b0bench_benchmark.is_active:
+                raise BenchmarkOperationError(
+                    "An r0b0bench benchmark is already running."
+                )
             if state.context_benchmark.is_active:
                 raise BenchmarkOperationError("A Context benchmark is already running.")
             if state.concurrency_benchmark.is_active:

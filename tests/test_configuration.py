@@ -333,6 +333,7 @@ def test_concurrency_defaults_are_backward_compatible_when_omitted() -> None:
     assert concurrency.request_timeout_seconds == 120.0
     assert concurrency.delay_between_levels_seconds == 3.0
     assert concurrency.maximum_concurrency == 128
+    assert concurrency.unique_prompt_suffix_per_request is True
 
 
 def test_builtin_and_repository_yaml_have_the_exact_concurrency_shape() -> None:
@@ -346,6 +347,7 @@ def test_builtin_and_repository_yaml_have_the_exact_concurrency_shape() -> None:
         "request_timeout_seconds": 120.0,
         "delay_between_levels_seconds": 3.0,
         "maximum_concurrency": 128,
+        "unique_prompt_suffix_per_request": True,
     }
     assert BUILTIN_CONFIG["benchmarks"]["concurrency"] == expected  # type: ignore[index]
     builtin = ModelTopConfig.model_validate(BUILTIN_CONFIG)
