@@ -302,11 +302,7 @@ def _identity(result: _Result) -> tuple[str, ArchivedResultKind]:
 
 
 def _config_fingerprint(result: _Result) -> str:
-    config = (
-        _safe_config(result)
-        if isinstance(result, R0b0benchBenchmarkResult)
-        else result.config.model_dump(mode="json")
-    )
+    config = result.config.model_dump(mode="json")
     content = json.dumps(
         config,
         sort_keys=True,

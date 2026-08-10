@@ -189,7 +189,11 @@ class ResultsView(Vertical):
                 ArchivedResultsComparisonRequested((selected[0], selected[1]))
             )
             return
-        if event.option.id is not None and state.speed_test.result_by_id(
-            str(event.option.id)
-        ):
-            self.post_message(SpeedTestResultSelected(str(event.option.id)))
+        if event.option.id is None:
+            return
+        result_id = str(event.option.id)
+        if state.speed_test.result_by_id(result_id):
+            self.post_message(SpeedTestResultSelected(result_id))
+            return
+        if result_id in state.result_archive.documents:
+            self._toggle(result_id)

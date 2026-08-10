@@ -447,9 +447,10 @@ class ConcurrencyBenchmark(Benchmark[ConcurrencyBenchmarkResult]):
         if self._config.unique_prompt_suffix_per_request:
             # Break identical-prefix KV cache so concurrent load resembles
             # multi-tenant traffic rather than one cached prompt replayed N times.
+            phase = "measured" if publish else "warmup"
             user_prompt = (
                 f"{self._config.prompt.rstrip()}\n\n"
-                f"[concurrency-request {level}/{sequence}]"
+                f"[concurrency-request {phase} {level}/{sequence}]"
             )
         messages.append(ChatMessage("user", user_prompt))
         request = GenerationRequest(

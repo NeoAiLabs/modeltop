@@ -174,7 +174,7 @@ def test_fixed_benchmark_enforces_bound_and_preserves_request_contract() -> None
                 ChatMessage("system", "system"),
                 ChatMessage(
                     "user",
-                    f"fixed prompt\n\n[concurrency-request 3/{sequence}]",
+                    f"fixed prompt\n\n[concurrency-request measured 3/{sequence}]",
                 ),
             )
             for sequence, messages in enumerate(client.messages, start=1)
@@ -227,6 +227,10 @@ def test_warmups_are_excluded_and_sweep_levels_do_not_overlap() -> None:
         assert [level.concurrency for level in result.levels] == [1, 2]
         assert [level.attempted_requests for level in result.levels] == [3, 3]
         assert client.peak_active == 2
+        prompts = [messages[-1].content for messages in client.messages]
+        assert len(prompts) == len(set(prompts))
+        assert prompts[0].endswith("[concurrency-request warmup 1/1]")
+        assert prompts[1].endswith("[concurrency-request measured 1/1]")
 
     asyncio.run(scenario())
 

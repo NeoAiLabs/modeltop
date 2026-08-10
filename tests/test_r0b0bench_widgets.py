@@ -232,6 +232,19 @@ def test_progress_and_result_panels_render_normalized_payload_free_state(
             assert "3/4 · concurrency" in text
             assert "12.5s" in text
             assert "Esc cancels" in text
+            state = replace(
+                state,
+                r0b0bench_benchmark=replace(
+                    state.r0b0bench_benchmark,
+                    status=R0b0benchBenchmarkStatus.VALIDATING,
+                    progress=None,
+                ),
+            )
+            panel.update_state(state)
+            text = "\n".join(_plain(widget) for widget in panel.query(Static))
+            assert "2/4 completed" not in text
+            assert "Tests: --" in text
+            assert "Outcomes: --" in text
 
     async def result_scenario() -> None:
         app = _ResultsApp()
@@ -410,6 +423,20 @@ def test_app_runs_selectable_workspace_archives_and_reruns(
             app.action_export_result()
             await pilot.pause()
             assert switcher.current == "r0b0bench-config-panel"
+            menu.focus()
+            menu.highlighted = 8
+            await pilot.press("enter")
+            await pilot.pause()
+            history = app.query_one("#results-list", OptionList)
+            history.focus()
+            history.highlighted = 0
+            selected_id = str(history.get_option_at_index(0).id)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.dashboard_state is not None
+            assert app.dashboard_state.result_archive.archive_selection == (
+                selected_id,
+            )
 
         assert transport.close_count == 1
 

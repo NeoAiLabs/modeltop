@@ -55,6 +55,15 @@ class R0b0benchProgressPanel(VerticalScroll):
             f"Model: {state.selected_model_id or '--'}"
         )
         if progress is None:
+            self.query_one("#r0b0bench-progress-count", Static).update("Tests: --")
+            self.query_one("#r0b0bench-progress-outcomes", Static).update(
+                "Outcomes: --"
+            )
+            self.query_one("#r0b0bench-progress-current", Static).update("Current: --")
+            self.query_one("#r0b0bench-progress-elapsed", Static).update("Elapsed: --")
+            self.query_one("#r0b0bench-progress-hardware", Static).update(
+                "Hardware: --"
+            )
             return
         self.query_one("#r0b0bench-progress-count", Static).update(
             f"Tests: {progress.completed_count}/{progress.configured_count} completed"

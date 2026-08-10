@@ -77,3 +77,30 @@ def test_r0b0bench_archive_redacts_evidence_and_compares_allowlisted_metrics(
     comparison = _rows(first, second)
     assert ("canary · cases", 1, 2) in comparison
     assert any(label == "Invalid for publish" for label, _, _ in comparison)
+
+
+
+def test_r0b0bench_fingerprint_includes_redacted_runtime_paths(tmp_path: Path) -> None:
+    factory = runpy.run_path("tests/test_r0b0bench_widgets.py")["_result"]
+    baseline = factory(tmp_path)
+    changed = replace(
+        baseline,
+        benchmark_id="r0b0bench-20260804T120002Z-feedface",
+        upstream_run_id="r0b0bench-20260804T120002Z-feedface",
+        config=baseline.config.model_copy(
+            update={"tokenizer_path": str(tmp_path / "tokenizer.json")}
+        ),
+    )
+    archive = ResultArchive(tmp_path / "history")
+
+    snapshot = archive.archive_result(baseline)
+    snapshot = archive.archive_result(changed)
+
+    first = snapshot.documents[baseline.benchmark_id]
+    second = snapshot.documents[changed.benchmark_id]
+    assert (
+        first.entry.configuration_fingerprint
+        != second.entry.configuration_fingerprint
+    )
+    rendered = json.dumps(second.details, allow_nan=False)
+    assert str(tmp_path / "tokenizer.json") not in rendered

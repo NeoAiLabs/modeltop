@@ -492,7 +492,7 @@ def _strict_ratio(value: object) -> float:
 def _optional(
     summary: Mapping[str, object], key: str, parser: Callable[[object], Any]
 ) -> Any | None:
-    if key not in summary:
+    if key not in summary or summary[key] is None:
         return None
     return parser(summary[key])
 
@@ -953,6 +953,15 @@ class SubprocessR0b0benchRunner:
             prerequisites = resolve_r0b0bench_prerequisites(request.config)
             if prerequisites.issues:
                 _raise("prerequisite_unavailable")
+            resolved_tokenizer_path: str | None = None
+            if (
+                "niah" in request.config.selected_lanes
+                and request.config.tokenizer_path
+            ):
+                tokenizer_path = _existing_path(request.config.tokenizer_path)
+                if tokenizer_path is None:
+                    _raise("prerequisite_unavailable")
+                resolved_tokenizer_path = str(tokenizer_path)
             environment = _base_child_environment(
                 prerequisites.child_environment, model_id=request.model_id
             )
@@ -974,9 +983,17 @@ class SubprocessR0b0benchRunner:
             root, run_directory = _allocate_run_directory(request)
             environment["HOME"] = str(run_directory)
             environment["TMPDIR"] = str(run_directory)
+            normalized_config = request.config
+            if (
+                resolved_tokenizer_path is not None
+                and resolved_tokenizer_path != request.config.tokenizer_path
+            ):
+                normalized_config = request.config.model_copy(
+                    update={"tokenizer_path": resolved_tokenizer_path}
+                )
             normalized_request = R0b0benchRunnerRequest(
                 benchmark_id=request.benchmark_id,
-                config=request.config,
+                config=normalized_config,
                 base_url=request.base_url,
                 model_id=request.model_id,
                 output_root=root,

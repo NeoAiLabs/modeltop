@@ -142,6 +142,24 @@ def test_prepare_rejects_credentials_and_uses_private_allowlisted_environment(
     assert "UNRELATED_SECRET" not in prepared.child_environment
     assert "PARENT_SECRET" not in repr(prepared)
 
+    tokenizer = tmp_path / "tokenizer.json"
+    tokenizer.write_text("{}\n", encoding="utf-8")
+    niah_request = R0b0benchRunnerRequest(
+        benchmark_id="r0b0bench-20260804T120001Z-cafebabe",
+        config=R0b0benchBenchmarkConfig(
+            profile="core-subset",
+            selected_lanes=("niah",),
+            tokenizer_path=f"~/{tokenizer.name}",
+        ),
+        base_url="http://127.0.0.1:8000/v1",
+        model_id="org/model",
+        output_root=tmp_path / "runs",
+        api_key="EMPTY",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    prepared_niah = asyncio.run(runner.prepare(niah_request))
+    assert prepared_niah.request.config.tokenizer_path == str(tokenizer.resolve())
+
 
 def _raw_lane(lane_id: str, summary: dict[str, object]) -> dict[str, object]:
     return {
@@ -238,6 +256,54 @@ def test_report_parser_normalizes_allowlisted_metrics_and_rejects_drift(
     with pytest.raises(R0b0benchRunnerError) as captured:
         _parse_report(prepared, report_path)
     assert captured.value.code == "invalid_upstream_result"
+
+
+def test_report_parser_treats_null_lane_metrics_as_absent(tmp_path: Path) -> None:
+    config = R0b0benchBenchmarkConfig(selected_lanes=("latency",))
+    run_directory = tmp_path / _RUN_ID
+    run_directory.mkdir(mode=0o700)
+    prepared = R0b0benchPreparedRun(
+        R0b0benchRunnerRequest(
+            _RUN_ID,
+            config,
+            "http://127.0.0.1:8000/v1",
+            "org/model",
+            tmp_path,
+            "EMPTY",
+        ),
+        {},
+        run_directory,
+    )
+    raw = _raw_lane("latency", {"stream": {"ttft_ms_mean": None}, "failed": 1})
+    raw["status"] = "FAIL"
+    lane_directory = run_directory / "lanes" / "latency"
+    lane_directory.mkdir(parents=True, exist_ok=True)
+    (lane_directory / "lane_result.json").write_text(json.dumps(raw))
+    report_path = run_directory / "report.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "schema_version": R0B0BENCH_REPORT_SCHEMA,
+                "r0b0bench_version": R0B0BENCH_VERSION,
+                "run_id": prepared.request.benchmark_id,
+                "profile": prepared.request.config.profile,
+                "base_url": prepared.request.base_url,
+                "model": prepared.request.model_id,
+                "systems_lanes": list(R0B0BENCH_SYSTEMS_ORDER),
+                "invalid_for_publish": True,
+                "started_utc": "2026-08-04T12:00:00+00:00",
+                "elapsed_s": 1.0,
+                "lanes": [raw],
+                "infra_errors_total": 0,
+            }
+        )
+    )
+
+    parsed = _parse_report(prepared, report_path)
+
+    assert parsed.lanes[0].metrics == (
+        R0b0benchMetric("failed_requests", 1, "count"),
+    )
 
 
 def _store() -> ApplicationStateStore:
