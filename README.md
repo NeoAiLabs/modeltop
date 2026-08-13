@@ -55,6 +55,7 @@ The tracked checkout configuration selects `local-8888`. Built-in defaults and `
 application:
   refresh_interval_seconds: 5
   request_timeout_seconds: 5
+  chat_request_timeout_seconds: 300
   default_server: local-vllm  # local-8888 in config/modeltop.yaml
 hardware:
   enabled: true

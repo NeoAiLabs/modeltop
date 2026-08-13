@@ -134,3 +134,10 @@ def test_speculative_usage_merge_and_rate_derivation() -> None:
     assert bare.draft_tokens is None
     assert bare.accepted_tokens is None
     assert bare.acceptance_rate is None
+
+    inconsistent = MetricCollector((ChatMessage("user", "p"),), clock=_Clock(1.0, 2.0))
+    inconsistent.update_usage(1, 1, 2, draft_tokens=4, accepted_tokens=9)
+    overflow = inconsistent.finish()
+    assert overflow.draft_tokens == 4
+    assert overflow.accepted_tokens == 9
+    assert overflow.acceptance_rate is None

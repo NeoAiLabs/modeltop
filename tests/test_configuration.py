@@ -123,6 +123,8 @@ def test_configuration_precedence_and_source_reporting(tmp_path: Path) -> None:
     assert built_in.config.hardware.enabled
     assert built_in.config.hardware.refresh_interval_seconds == 2
     assert built_in.config.hardware.preferred_provider == "auto"
+    assert built_in.config.application.request_timeout_seconds == 5.0
+    assert built_in.config.application.chat_request_timeout_seconds == 300.0
 
 
 def test_authoritative_environment_path_must_load(tmp_path: Path) -> None:
@@ -192,10 +194,15 @@ def test_validation_failure_does_not_expose_api_key(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("value", [0, -1, float("inf"), float("-inf"), float("nan")])
 @pytest.mark.parametrize(
-    "field", ["refresh_interval_seconds", "request_timeout_seconds"]
+    "field",
+    [
+        "refresh_interval_seconds",
+        "request_timeout_seconds",
+        "chat_request_timeout_seconds",
+    ],
 )
 def test_intervals_must_be_positive_and_finite(field: str, value: float) -> None:
-    """Both configured intervals reject zero, negatives, and non-finite values."""
+    """Configured intervals reject zero, negatives, and non-finite values."""
     payload = {
         "application": {field: value},
         "servers": [{"id": "s", "name": "S", "base_url": "http://server"}],

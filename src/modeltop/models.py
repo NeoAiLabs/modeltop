@@ -40,10 +40,15 @@ class ApplicationConfig(BaseModel):
 
     refresh_interval_seconds: float = 5.0
     request_timeout_seconds: float = 5.0
+    chat_request_timeout_seconds: float = 300.0
     default_server: str | None = None
     theme: CatppuccinTheme = DEFAULT_CATPPUCCIN_THEME
 
-    @field_validator("refresh_interval_seconds", "request_timeout_seconds")
+    @field_validator(
+        "refresh_interval_seconds",
+        "request_timeout_seconds",
+        "chat_request_timeout_seconds",
+    )
     @classmethod
     def validate_positive_finite_interval(cls, value: float) -> float:
         return _validate_positive_finite_interval(value)

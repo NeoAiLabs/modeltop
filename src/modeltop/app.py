@@ -695,6 +695,7 @@ class ModelTopApp(App[None]):
             self._generation_service,
             self._state_store,
             self._handle_dashboard_state_change,
+            request_timeout_seconds=config.application.chat_request_timeout_seconds,
         )
         self._speed_test_service = SpeedTestService(
             self._generation_service,
@@ -925,6 +926,23 @@ class ModelTopApp(App[None]):
             return state
         if snapshot == state.result_archive:
             return state
+        if (
+            snapshot.load_error is not None
+            and snapshot.load_error.startswith("Result archive unavailable")
+            and state.result_archive.entries
+            and not snapshot.entries
+        ):
+            if snapshot.load_error == state.result_archive.load_error:
+                return state
+            return store.update(
+                lambda current: replace(
+                    current,
+                    result_archive=replace(
+                        current.result_archive,
+                        load_error=snapshot.load_error,
+                    ),
+                )
+            )
         updated = store.update(
             lambda current: replace(current, result_archive=snapshot)
         )
@@ -1325,12 +1343,14 @@ class ModelTopApp(App[None]):
             and not state.concurrency_benchmark.is_active
         ):
             result = state.concurrency_benchmark.latest_result
-            config = (
-                result.config
-                if state.concurrency_benchmark.is_terminal and result is not None
-                else state.concurrency_benchmark.config
-            )
-            self._start_concurrency_benchmark(config)
+            if state.concurrency_benchmark.is_terminal and result is not None:
+                self._start_concurrency_benchmark(result.config)
+            else:
+                config = self.query_one(ConcurrencyView).config_panel.parse_config(
+                    notify=True
+                )
+                if config is not None:
+                    self._start_concurrency_benchmark(config)
             return
         if state.active_view == "speed-test" and state.speed_test.is_terminal:
             latest = state.speed_test.latest_result

@@ -87,6 +87,7 @@ class ResultArchiveSnapshot:
     documents: Mapping[str, ArchivedResultDocument] = field(default_factory=dict)
     archive_selection: tuple[str, ...] = ()
     load_error: str | None = None
+    skipped_entries: tuple[ArchiveEntry, ...] = ()
 
     def __post_init__(self) -> None:
         if len(self.archive_selection) > 2:
@@ -125,14 +126,25 @@ class ResultArchive:
             )
 
         entries: list[ArchiveEntry] = []
+        skipped: list[ArchiveEntry] = []
         documents: dict[str, ArchivedResultDocument] = {}
-        errors = False
+        invalid_index = False
         seen: set[str] = set()
         for item in raw["entries"]:
             try:
                 entry = _entry_from_payload(item)
-                if entry.result_id in seen:
-                    raise ValueError("duplicate result ID")
+            except (ValueError, TypeError) as error:
+                invalid_index = True
+                logger.warning(
+                    "Result archive index entry invalid error=%s", type(error).__name__
+                )
+                continue
+            if entry.result_id in seen:
+                invalid_index = True
+                logger.warning("Result archive index contains a duplicate result ID")
+                continue
+            seen.add(entry.result_id)
+            try:
                 document = _document_from_payload(
                     json.loads(
                         (self.directory / entry.document_name).read_text(
@@ -142,23 +154,30 @@ class ResultArchive:
                 )
                 if document.entry != entry:
                     raise ValueError("document metadata mismatch")
-                seen.add(entry.result_id)
                 entries.append(entry)
                 documents[entry.result_id] = document
             except (OSError, ValueError, TypeError, json.JSONDecodeError) as error:
-                errors = True
+                skipped.append(entry)
                 logger.warning(
                     "Result archive entry skipped error=%s", type(error).__name__
                 )
         entries.sort(key=lambda item: item.completed_at, reverse=True)
+        skipped.sort(key=lambda item: item.completed_at, reverse=True)
         valid_selection = tuple(
             result_id for result_id in archive_selection if result_id in documents
         )[:2]
+        if invalid_index:
+            load_error = "Result archive unavailable: invalid index"
+        elif skipped:
+            load_error = "Result archive contains unreadable entries."
+        else:
+            load_error = None
         return ResultArchiveSnapshot(
             tuple(entries),
             documents,
             valid_selection,
-            "Result archive contains unreadable entries." if errors else None,
+            load_error,
+            tuple(skipped),
         )
 
     def archive_result(
@@ -166,7 +185,13 @@ class ResultArchive:
     ) -> ResultArchiveSnapshot:
         snapshot = self.load_archive(archive_selection)
         result_id, kind = _identity(result)
-        if result_id in snapshot.documents:
+        known_ids = {entry.result_id for entry in snapshot.entries}
+        known_ids.update(entry.result_id for entry in snapshot.skipped_entries)
+        if result_id in known_ids or result_id in snapshot.documents:
+            return snapshot
+        if snapshot.load_error is not None and snapshot.load_error.startswith(
+            "Result archive unavailable"
+        ):
             return snapshot
         document = _result_document(result, kind)
         document = self._with_available_name(document)
@@ -179,13 +204,24 @@ class ResultArchive:
                     reverse=True,
                 )
             )
-            self._write_index(updated_entries)
+            index_entries = tuple(
+                sorted(
+                    (*snapshot.entries, *snapshot.skipped_entries, document.entry),
+                    key=lambda item: item.completed_at,
+                    reverse=True,
+                )
+            )
+            self._write_index(index_entries)
         except ResultExportError:
             raise
         documents = dict(snapshot.documents)
         documents[result_id] = document
         return ResultArchiveSnapshot(
-            updated_entries, documents, snapshot.archive_selection, snapshot.load_error
+            updated_entries,
+            documents,
+            snapshot.archive_selection,
+            snapshot.load_error,
+            snapshot.skipped_entries,
         )
 
     def _write_document(self, document: ArchivedResultDocument) -> None:

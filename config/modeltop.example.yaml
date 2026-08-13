@@ -1,6 +1,7 @@
 application:
   refresh_interval_seconds: 5
   request_timeout_seconds: 5
+  chat_request_timeout_seconds: 300
   default_server: local-vllm
   theme: catppuccin-mocha
 hardware:

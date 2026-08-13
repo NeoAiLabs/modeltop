@@ -4,6 +4,7 @@
 import json
 import runpy
 from dataclasses import replace
+from datetime import timedelta
 from pathlib import Path
 from typing import cast
 
@@ -79,7 +80,6 @@ def test_r0b0bench_archive_redacts_evidence_and_compares_allowlisted_metrics(
     assert any(label == "Invalid for publish" for label, _, _ in comparison)
 
 
-
 def test_r0b0bench_fingerprint_includes_redacted_runtime_paths(tmp_path: Path) -> None:
     factory = runpy.run_path("tests/test_r0b0bench_widgets.py")["_result"]
     baseline = factory(tmp_path)
@@ -99,8 +99,61 @@ def test_r0b0bench_fingerprint_includes_redacted_runtime_paths(tmp_path: Path) -
     first = snapshot.documents[baseline.benchmark_id]
     second = snapshot.documents[changed.benchmark_id]
     assert (
-        first.entry.configuration_fingerprint
-        != second.entry.configuration_fingerprint
+        first.entry.configuration_fingerprint != second.entry.configuration_fingerprint
     )
     rendered = json.dumps(second.details, allow_nan=False)
     assert str(tmp_path / "tokenizer.json") not in rendered
+
+
+def test_unreadable_index_is_not_rewritten(tmp_path: Path) -> None:
+    factory = runpy.run_path("tests/test_result_export.py")["_result"]
+    first = factory()
+    second = replace(first, run_id="speed-test-second-run")
+    archive = ResultArchive(tmp_path / "history")
+    archived = archive.archive_result(first)
+    index = archive.directory / "index.json"
+    original_index = index.read_text(encoding="utf-8")
+    first_document = archive.directory / archived.entries[0].document_name
+    first_payload = first_document.read_text(encoding="utf-8")
+    index.write_text("{not-json", encoding="utf-8")
+
+    snapshot = archive.archive_result(second)
+
+    assert snapshot.load_error == "Result archive unavailable: JSONDecodeError"
+    assert snapshot.entries == ()
+    assert index.read_text(encoding="utf-8") == "{not-json"
+    assert first_document.read_text(encoding="utf-8") == first_payload
+    assert original_index != "{not-json"
+    document_names = [
+        path.name for path in (archive.directory / "runs").rglob("*.json")
+    ]
+    assert len(document_names) == 1
+
+
+def test_unreadable_document_stays_indexed_when_archiving(tmp_path: Path) -> None:
+    factory = runpy.run_path("tests/test_result_export.py")["_result"]
+    first = factory()
+    second = replace(
+        first,
+        run_id="speed-test-second-run",
+        completed_at=first.completed_at + timedelta(seconds=1),
+    )
+    archive = ResultArchive(tmp_path / "history")
+    first_snapshot = archive.archive_result(first)
+    document_path = archive.directory / first_snapshot.entries[0].document_name
+    document_path.write_text("{", encoding="utf-8")
+
+    snapshot = archive.archive_result(second)
+
+    assert snapshot.load_error == "Result archive contains unreadable entries."
+    assert [entry.result_id for entry in snapshot.entries] == [second.run_id]
+    assert [entry.result_id for entry in snapshot.skipped_entries] == [first.run_id]
+    index = json.loads((archive.directory / "index.json").read_text(encoding="utf-8"))
+    assert {entry["result_id"] for entry in index["entries"]} == {
+        first.run_id,
+        second.run_id,
+    }
+    reloaded = archive.load_archive()
+    assert first.run_id not in reloaded.documents
+    assert second.run_id in reloaded.documents
+    assert [entry.result_id for entry in reloaded.skipped_entries] == [first.run_id]

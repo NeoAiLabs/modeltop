@@ -19,7 +19,11 @@ from modeltop.api.chat import (
 from modeltop.api.errors import HTTPResponseError, ProtocolError
 from modeltop.chat.models import ChatMessage, GenerationSettings, GenerationStatus
 from modeltop.models import DiscoveredModel
-from modeltop.services.chat import ChatOperationError, DashboardChatService
+from modeltop.services.chat import (
+    DEFAULT_CHAT_REQUEST_TIMEOUT_SECONDS,
+    ChatOperationError,
+    DashboardChatService,
+)
 from modeltop.services.generation import (
     GenerationCancelled,
     GenerationFailed,
@@ -124,10 +128,22 @@ def test_blank_offline_no_model_and_overlap_reject_without_requests() -> None:
     service = DashboardChatService(
         GenerationService(client), _store(), lambda state: None
     )
-    service.begin_generation("first")
+    first = service.begin_generation("first")
+    assert first.request.request_timeout_seconds == DEFAULT_CHAT_REQUEST_TIMEOUT_SECONDS
     with pytest.raises(ChatOperationError, match="already"):
         service.begin_generation("second")
     assert client.requests == []
+
+
+def test_begin_generation_uses_configured_chat_timeout() -> None:
+    service = DashboardChatService(
+        GenerationService(_ScriptedClient([])),
+        _store(),
+        lambda state: None,
+        request_timeout_seconds=45.0,
+    )
+    pending = service.begin_generation("hello")
+    assert pending.request.request_timeout_seconds == 45.0
 
 
 def test_success_resends_full_history_and_commits_one_assistant() -> None:

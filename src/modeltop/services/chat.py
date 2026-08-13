@@ -38,6 +38,9 @@ class PendingGeneration:
 type StateCallback = Callable[[ApplicationState], None]
 
 
+DEFAULT_CHAT_REQUEST_TIMEOUT_SECONDS = 300.0
+
+
 class DashboardChatService:
     """Own chat-only transforms over the shared immutable state store."""
 
@@ -46,10 +49,13 @@ class DashboardChatService:
         generation_service: GenerationService,
         state_store: ApplicationStateStore,
         on_state_change: StateCallback,
+        *,
+        request_timeout_seconds: float = DEFAULT_CHAT_REQUEST_TIMEOUT_SECONDS,
     ) -> None:
         self._state_store = state_store
         self._on_state_change = on_state_change
         self._generation_service = generation_service
+        self._request_timeout_seconds = request_timeout_seconds
 
     @property
     def state(self) -> ApplicationState:
@@ -108,6 +114,7 @@ class DashboardChatService:
                 model_id=model_id,
                 messages=request_messages,
                 settings=state.chat_session.settings,
+                request_timeout_seconds=self._request_timeout_seconds,
             )
             pending = PendingGeneration(generation_id, request)
             captured_session = replace(

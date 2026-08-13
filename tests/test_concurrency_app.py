@@ -224,3 +224,52 @@ def test_gated_fixed_run_isolates_chat_cancels_and_recovers_polling() -> None:
             assert not app.query_one("#chat-prompt").disabled
 
     asyncio.run(scenario())
+
+
+def test_run_binding_starts_visible_form_draft() -> None:
+    async def scenario() -> None:
+        transport = _ConcurrencyTransport(expected_peak=1)
+        app = _app(transport)
+        async with app.run_test(size=(80, 24)) as pilot:
+            await _wait_for_status(app, pilot, ServerStatus.ONLINE)
+            app._set_active_view("concurrency")
+            view = app.query_one(ConcurrencyView)
+            view.show_config(
+                ConcurrencyBenchmarkConfig(
+                    mode="fixed",
+                    concurrency_levels=(1,),
+                    requests_per_level=1,
+                    warmup_requests=0,
+                    request_timeout_seconds=10.0,
+                    delay_between_levels_seconds=0.0,
+                )
+            )
+            view.query_one("#concurrency-requests", Input).value = "2"
+            stored = app.dashboard_state
+            assert stored is not None
+            assert stored.concurrency_benchmark.config.requests_per_level != 2
+            app.action_run_or_rerun()
+            await asyncio.wait_for(transport.reached_peak.wait(), timeout=3)
+            state = app.dashboard_state
+            assert state is not None
+            assert state.concurrency_benchmark.config.requests_per_level == 2
+            assert state.concurrency_benchmark.config.concurrency_levels == (1,)
+            transport.release.set()
+            for _ in range(200):
+                latest = app.dashboard_state
+                if (
+                    latest is not None
+                    and latest.concurrency_benchmark.status
+                    is ConcurrencyBenchmarkStatus.COMPLETED
+                ):
+                    break
+                await asyncio.sleep(0.005)
+            terminal = app.dashboard_state
+            assert terminal is not None
+            assert (
+                terminal.concurrency_benchmark.status
+                is ConcurrencyBenchmarkStatus.COMPLETED
+            )
+            assert terminal.concurrency_benchmark.config.requests_per_level == 2
+
+    asyncio.run(scenario())

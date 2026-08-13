@@ -195,6 +195,7 @@ class MetricCollector:
             and draft_tokens is not None
             and draft_tokens > 0
             and accepted_tokens is not None
+            and 0 <= accepted_tokens <= draft_tokens
         ):
             acceptance_rate = accepted_tokens / draft_tokens
 

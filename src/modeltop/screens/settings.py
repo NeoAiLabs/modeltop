@@ -73,6 +73,8 @@ class SettingsView(VerticalScroll):
             f"RUNTIME\nRefresh interval: "
             f"{self._config.application.refresh_interval_seconds:g}s\n"
             f"Request timeout: {self._config.application.request_timeout_seconds:g}s\n"
+            f"Chat request timeout: "
+            f"{self._config.application.chat_request_timeout_seconds:g}s\n"
             f"THEME\n{self._config.application.theme}\n"
             f"Hardware monitoring: {hardware}\n"
             f"Hardware refresh: {self._config.hardware.refresh_interval_seconds:g}s\n\n"
